@@ -39,11 +39,11 @@ export const getUserDecks = async (
   try {
     const decks = await db.getAllAsync<Deck & { card_count: number }>(
       `SELECT d.*, COALESCE(COUNT(c.id), 0) as card_count 
-       FROM decks d 
-       LEFT JOIN cards c ON d.id = c.deck_id 
-       WHERE d.user_id = ? 
-       GROUP BY d.id 
-       ORDER BY d.created_at DESC`,
+         FROM decks d 
+         LEFT JOIN cards c ON d.id = c.deck_id 
+         WHERE d.user_id = ? 
+         GROUP BY d.id 
+         ORDER BY d.created_at DESC`,
       [userId]
     );
 
@@ -63,6 +63,8 @@ export const addCardsToDeck = async (
 
   try {
     const cards: Card[] = [];
+    // Make cards immediately available for study
+    const currentTime = new Date().toISOString();
 
     for (const pair of qaPairs) {
       // Insert card
@@ -73,10 +75,10 @@ export const addCardsToDeck = async (
 
       const cardId = cardResult.lastInsertRowId;
 
-      // Initialize study data for the card
+      // Initialize study data for the card - make it immediately due
       await db.runAsync(
         "INSERT INTO card_study_data (card_id, ease_factor, repetitions, interval_days, due_date) VALUES (?, ?, ?, ?, ?)",
-        [cardId, 2.5, 0, 0, new Date().toISOString()]
+        [cardId, 2.5, 0, 0, currentTime] // Set due_date to current time
       );
 
       cards.push({
@@ -87,6 +89,9 @@ export const addCardsToDeck = async (
       });
     }
 
+    console.log(
+      `Added ${cards.length} cards to deck ${deckId}, all due immediately`
+    );
     return cards;
   } catch (error) {
     console.error("Failed to add cards to deck:", error);
@@ -118,14 +123,63 @@ export const getDueCards = async (
   const db = getDatabase();
 
   try {
+    const currentTime = new Date().toISOString();
+    console.log("Getting due cards for deck:", deckId, "at time:", currentTime);
+
     const dueCards = await db.getAllAsync<CardWithStudyData>(
       `SELECT c.*, csd.ease_factor, csd.repetitions, csd.interval_days, csd.due_date
-       FROM cards c
-       JOIN card_study_data csd ON c.id = csd.card_id
-       WHERE c.deck_id = ? AND csd.due_date <= datetime('now')
-       ORDER BY csd.due_date ASC`,
-      [deckId]
+         FROM cards c
+         JOIN card_study_data csd ON c.id = csd.card_id
+         WHERE c.deck_id = ? AND csd.due_date <= ?
+         ORDER BY csd.due_date ASC`,
+      [deckId, currentTime]
     );
+
+    console.log(`Found ${dueCards.length} due cards`);
+
+    // If no due cards but there are cards in the deck, let's check why
+    if (dueCards.length === 0) {
+      const allCardsWithStudyData = await db.getAllAsync<CardWithStudyData>(
+        `SELECT c.*, csd.ease_factor, csd.repetitions, csd.interval_days, csd.due_date
+           FROM cards c
+           JOIN card_study_data csd ON c.id = csd.card_id
+           WHERE c.deck_id = ?
+           ORDER BY csd.due_date ASC`,
+        [deckId]
+      );
+
+      console.log("All cards in deck with study data:", allCardsWithStudyData);
+
+      // If there are cards but none are due, make them due now (for new decks)
+      if (allCardsWithStudyData.length > 0) {
+        console.log("Making all cards in deck due for study...");
+
+        for (const card of allCardsWithStudyData) {
+          if (card.id) {
+            // Type guard to ensure card.id exists
+            await db.runAsync(
+              `UPDATE card_study_data 
+                 SET due_date = ?
+                 WHERE card_id = ?`,
+              [currentTime, card.id]
+            );
+          }
+        }
+
+        // Fetch the updated due cards
+        const updatedDueCards = await db.getAllAsync<CardWithStudyData>(
+          `SELECT c.*, csd.ease_factor, csd.repetitions, csd.interval_days, csd.due_date
+             FROM cards c
+             JOIN card_study_data csd ON c.id = csd.card_id
+             WHERE c.deck_id = ? AND csd.due_date <= ?
+             ORDER BY csd.due_date ASC`,
+          [deckId, currentTime]
+        );
+
+        console.log(`After update: ${updatedDueCards.length} due cards`);
+        return updatedDueCards;
+      }
+    }
 
     return dueCards;
   } catch (error) {
@@ -142,10 +196,12 @@ export const updateCardStudyData = async (
   const db = getDatabase();
 
   try {
+    console.log("Updating card study data:", cardId, studyData);
+
     await db.runAsync(
       `UPDATE card_study_data 
-       SET ease_factor = ?, repetitions = ?, interval_days = ?, due_date = ?
-       WHERE card_id = ?`,
+         SET ease_factor = ?, repetitions = ?, interval_days = ?, due_date = ?
+         WHERE card_id = ?`,
       [
         studyData.ease_factor,
         studyData.repetitions,
@@ -154,6 +210,8 @@ export const updateCardStudyData = async (
         cardId,
       ]
     );
+
+    console.log("Card study data updated successfully");
   } catch (error) {
     console.error("Failed to update card study data:", error);
     throw error;
@@ -194,6 +252,8 @@ export const getDeckStats = async (
   const db = getDatabase();
 
   try {
+    const currentTime = new Date().toISOString();
+
     const stats = await db.getFirstAsync<{
       total_cards: number;
       due_cards: number;
@@ -201,14 +261,14 @@ export const getDeckStats = async (
       review_cards: number;
     }>(
       `SELECT 
-        COUNT(*) as total_cards,
-        COUNT(CASE WHEN csd.due_date <= datetime('now') THEN 1 END) as due_cards,
-        COUNT(CASE WHEN csd.repetitions = 0 THEN 1 END) as new_cards,
-        COUNT(CASE WHEN csd.repetitions > 0 THEN 1 END) as review_cards
-       FROM cards c
-       JOIN card_study_data csd ON c.id = csd.card_id
-       WHERE c.deck_id = ?`,
-      [deckId]
+          COUNT(*) as total_cards,
+          COUNT(CASE WHEN csd.due_date <= ? THEN 1 END) as due_cards,
+          COUNT(CASE WHEN csd.repetitions = 0 THEN 1 END) as new_cards,
+          COUNT(CASE WHEN csd.repetitions > 0 THEN 1 END) as review_cards
+         FROM cards c
+         JOIN card_study_data csd ON c.id = csd.card_id
+         WHERE c.deck_id = ?`,
+      [currentTime, deckId]
     );
 
     return {
@@ -225,5 +285,26 @@ export const getDeckStats = async (
       newCards: 0,
       reviewCards: 0,
     };
+  }
+};
+
+// Reset all cards in a deck to be due now (useful for testing/development)
+export const resetDeckForStudy = async (deckId: number): Promise<void> => {
+  const db = getDatabase();
+
+  try {
+    const currentTime = new Date().toISOString();
+
+    await db.runAsync(
+      `UPDATE card_study_data 
+         SET due_date = ?, repetitions = 0, ease_factor = 2.5, interval_days = 0
+         WHERE card_id IN (SELECT id FROM cards WHERE deck_id = ?)`,
+      [currentTime, deckId]
+    );
+
+    console.log(`Reset all cards in deck ${deckId} to be due for study`);
+  } catch (error) {
+    console.error("Failed to reset deck for study:", error);
+    throw error;
   }
 };

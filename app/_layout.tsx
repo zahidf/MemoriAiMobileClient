@@ -15,12 +15,13 @@ import { initDatabase, type User } from "../database/database";
 import LoginScreen from "../screens/LoginScreen";
 import {
   configureGoogleSignIn,
+  createMockUser,
   getCurrentUser,
   isSignedIn,
 } from "../services/authService";
 
-// Temporary: Set this to true to skip authentication for testing
-const SKIP_AUTH_FOR_TESTING = true;
+// Set this to true to automatically use mock authentication for development
+const USE_MOCK_AUTH = true;
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -38,24 +39,18 @@ export default function RootLayout() {
 
   const initializeApp = async () => {
     try {
-      // Initialize database
+      // Initialize database first
       await initDatabase();
       console.log("Database initialized");
 
-      if (SKIP_AUTH_FOR_TESTING) {
-        // Create a mock user for testing
-        const mockUser: User = {
-          id: 1,
-          google_id: "test_user_123",
-          email: "test@example.com",
-          name: "Test User",
-          profile_picture_url: undefined,
-        };
+      if (USE_MOCK_AUTH) {
+        // Use mock authentication for development
+        console.log("Using mock authentication for development");
+        const mockUser = await createMockUser();
         setUser(mockUser);
         setIsAuthenticated(true);
-        console.log("Using mock authentication for testing");
       } else {
-        // Configure Google Sign In (this will fail in Expo Go)
+        // Try to configure Google Sign In
         try {
           configureGoogleSignIn();
           console.log("Google Sign In configured");
@@ -71,13 +66,24 @@ export default function RootLayout() {
           }
         } catch (error) {
           console.error("Google Sign In configuration failed:", error);
-          console.log(
-            "Google Sign In not available in Expo Go - create a development build"
-          );
+          console.log("Falling back to mock user");
+
+          // Fallback to mock user
+          const mockUser = await createMockUser();
+          setUser(mockUser);
+          setIsAuthenticated(true);
         }
       }
     } catch (error) {
       console.error("App initialization error:", error);
+      // Even if there's an error, create a mock user so the app can function
+      try {
+        const mockUser = await createMockUser();
+        setUser(mockUser);
+        setIsAuthenticated(true);
+      } catch (mockError) {
+        console.error("Failed to create mock user:", mockError);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +102,7 @@ export default function RootLayout() {
     );
   }
 
-  if (!isAuthenticated && !SKIP_AUTH_FOR_TESTING) {
+  if (!isAuthenticated) {
     return (
       <>
         <LoginScreen onLoginSuccess={handleLoginSuccess} />

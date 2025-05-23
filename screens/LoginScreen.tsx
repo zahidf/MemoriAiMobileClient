@@ -1,4 +1,3 @@
-import { GoogleSigninButton } from "@react-native-google-signin/google-signin";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -6,6 +5,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { signInWithGoogle } from "../services/authService";
@@ -34,6 +34,23 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         "Sign In Error",
         error.message || "An error occurred during sign in"
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMockSignIn = async () => {
+    setLoading(true);
+
+    try {
+      // Use the signInWithGoogle function which will fall back to mock user
+      const user = await signInWithGoogle();
+      if (user) {
+        onLoginSuccess(user);
+      }
+    } catch (error: any) {
+      console.error("Mock login error:", error);
+      Alert.alert("Error", "Failed to sign in");
     } finally {
       setLoading(false);
     }
@@ -84,12 +101,32 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               <Text style={styles.loadingText}>Signing in...</Text>
             </View>
           ) : (
-            <GoogleSigninButton
-              style={styles.googleButton}
-              size={GoogleSigninButton.Size.Wide}
-              color={GoogleSigninButton.Color.Light}
-              onPress={handleGoogleSignIn}
-            />
+            <View style={styles.buttonsContainer}>
+              {/* Primary Sign In Button */}
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleGoogleSignIn}
+              >
+                <Text style={styles.primaryButtonText}>
+                  Sign in with Google
+                </Text>
+              </TouchableOpacity>
+
+              {/* Development Mock Button */}
+              <TouchableOpacity
+                style={styles.mockButton}
+                onPress={handleMockSignIn}
+              >
+                <Text style={styles.mockButtonText}>
+                  Continue as Test User (Development)
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.developmentNote}>
+                Note: Google Sign In requires a development build. Use "Test
+                User" option for Expo Go development.
+              </Text>
+            </View>
           )}
         </View>
       </View>
@@ -152,9 +189,47 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     lineHeight: 22,
   },
-  googleButton: {
-    width: 240,
-    height: 48,
+  buttonsContainer: {
+    width: "100%",
+    alignItems: "center",
+  },
+  primaryButton: {
+    backgroundColor: "#667eea",
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: "100%",
+    maxWidth: 300,
+  },
+  primaryButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  mockButton: {
+    backgroundColor: "#28a745",
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: "100%",
+    maxWidth: 300,
+  },
+  mockButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  developmentNote: {
+    fontSize: 12,
+    color: "#6c757d",
+    textAlign: "center",
+    fontStyle: "italic",
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   loadingContainer: {
     alignItems: "center",

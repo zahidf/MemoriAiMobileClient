@@ -14,7 +14,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getDueCards, updateCardStudyData } from "../services/deckService";
+import {
+  getDeckCards,
+  getDueCards,
+  updateCardStudyData,
+} from "../services/deckService";
 import type { CardWithStudyData } from "../types";
 import { calculateDueDateString, calculateSM2 } from "../utils/sm2Algorithm";
 
@@ -31,8 +35,7 @@ export default function StudyScreen() {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [cardsStudied, setCardsStudied] = useState(0);
 
-  // Animation values
-  const flipAnimation = new Animated.Value(0);
+  // Simple animation values
   const scaleAnimation = new Animated.Value(1);
 
   useEffect(() => {
@@ -48,7 +51,12 @@ export default function StudyScreen() {
       setCards(dueCards);
 
       if (dueCards.length === 0) {
-        setSessionComplete(true);
+        const allCards = await getDeckCards(parseInt(deckId));
+        if (allCards.length === 0) {
+          setSessionComplete(true);
+        } else {
+          setTimeout(() => loadDueCards(), 1000);
+        }
       }
     } catch (error) {
       console.error("Failed to load due cards:", error);
@@ -60,13 +68,6 @@ export default function StudyScreen() {
 
   const flipCard = () => {
     if (showAnswer) return;
-
-    Animated.timing(flipAnimation, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
     setShowAnswer(true);
   };
 
@@ -74,10 +75,15 @@ export default function StudyScreen() {
     if (!showAnswer || currentCardIndex >= cards.length) return;
 
     const currentCard = cards[currentCardIndex];
+
+    if (!currentCard.id) {
+      Alert.alert("Error", "Card is missing ID - cannot save progress");
+      return;
+    }
+
     setStudying(true);
 
     try {
-      // Calculate new SM-2 values
       const sm2Result = calculateSM2({
         quality,
         repetitions: currentCard.repetitions,
@@ -85,39 +91,39 @@ export default function StudyScreen() {
         previousInterval: currentCard.interval_days,
       });
 
-      // Update card study data
-      await updateCardStudyData(currentCard.id!, {
-        card_id: currentCard.id!,
+      await updateCardStudyData(currentCard.id, {
+        card_id: currentCard.id,
         ease_factor: sm2Result.easeFactor,
         repetitions: sm2Result.repetitions,
         interval_days: sm2Result.interval,
         due_date: calculateDueDateString(sm2Result.interval),
       });
 
-      // Animate card exit
+      // Quick scale animation for feedback
       Animated.sequence([
         Animated.timing(scaleAnimation, {
-          toValue: 0.8,
-          duration: 200,
+          toValue: 0.95,
+          duration: 100,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnimation, {
           toValue: 1,
-          duration: 200,
+          duration: 100,
           useNativeDriver: true,
         }),
       ]).start();
 
-      // Move to next card or complete session
       const nextIndex = currentCardIndex + 1;
       setCardsStudied(cardsStudied + 1);
 
       if (nextIndex >= cards.length) {
         setSessionComplete(true);
       } else {
-        setCurrentCardIndex(nextIndex);
-        setShowAnswer(false);
-        flipAnimation.setValue(0);
+        // Reset for next card
+        setTimeout(() => {
+          setCurrentCardIndex(nextIndex);
+          setShowAnswer(false);
+        }, 200);
       }
     } catch (error) {
       console.error("Failed to update card:", error);
@@ -132,7 +138,6 @@ export default function StudyScreen() {
     setShowAnswer(false);
     setSessionComplete(false);
     setCardsStudied(0);
-    flipAnimation.setValue(0);
     loadDueCards();
   };
 
@@ -178,7 +183,7 @@ export default function StudyScreen() {
               style={[styles.completionText, { color: colors.text + "80" }]}
             >
               {cards.length === 0
-                ? "No cards are due for review right now. Come back later!"
+                ? "No cards are due for review right now. Try the reset button on the home screen!"
                 : `You studied ${cardsStudied} cards. Great job!`}
             </ThemedText>
 
@@ -196,19 +201,17 @@ export default function StudyScreen() {
                 </ThemedText>
               </TouchableOpacity>
 
-              {cards.length > 0 && (
-                <TouchableOpacity
-                  style={[
-                    styles.completionButton,
-                    { backgroundColor: colors.tint },
-                  ]}
-                  onPress={resetSession}
-                >
-                  <Text style={[styles.buttonText, { color: "white" }]}>
-                    Study Again
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={[
+                  styles.completionButton,
+                  { backgroundColor: colors.tint },
+                ]}
+                onPress={resetSession}
+              >
+                <Text style={[styles.buttonText, { color: "white" }]}>
+                  Study Again
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -219,15 +222,11 @@ export default function StudyScreen() {
   const currentCard = cards[currentCardIndex];
   const progress = ((currentCardIndex + 1) / cards.length) * 100;
 
-  const frontRotation = flipAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"],
-  });
-
-  const backRotation = flipAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["180deg", "360deg"],
-  });
+  // Card colors based on state
+  const questionCardColor = "#4A90E2"; // Thoughtful blue - represents curiosity/inquiry
+  const answerCardColor = "#7ED321"; // Success green - represents knowledge/completion
+  const questionTextColor = "#FFFFFF"; // White text on blue
+  const answerTextColor = "#2C3E50"; // Dark text on green for better readability
 
   return (
     <ThemedView style={styles.container}>
@@ -260,56 +259,56 @@ export default function StudyScreen() {
       </View>
 
       <View style={styles.cardContainer}>
+        {/* Card-like design with enhanced depth */}
         <Animated.View
           style={[
             styles.card,
             {
-              backgroundColor: colors.background,
+              backgroundColor: showAnswer ? answerCardColor : questionCardColor,
               transform: [{ scale: scaleAnimation }],
             },
           ]}
         >
-          {!showAnswer ? (
-            // Question Side
-            <Animated.View
+          {/* Card corner indicator */}
+          <View
+            style={[
+              styles.cardCorner,
+              { backgroundColor: showAnswer ? "#5BB318" : "#2E7CD6" },
+            ]}
+          />
+
+          <View style={styles.cardHeader}>
+            <Text
               style={[
-                styles.cardSide,
-                { transform: [{ rotateY: frontRotation }] },
+                styles.cardType,
+                { color: showAnswer ? answerTextColor : questionTextColor },
               ]}
             >
-              <View style={styles.cardHeader}>
-                <ThemedText style={[styles.cardType, { color: colors.tint }]}>
-                  Question
-                </ThemedText>
-              </View>
-              <View style={styles.cardContent}>
-                <ThemedText style={styles.cardText}>
-                  {currentCard.question}
-                </ThemedText>
-              </View>
-            </Animated.View>
-          ) : (
-            // Answer Side
-            <Animated.View
+              {showAnswer ? "Answer" : "Question"}
+            </Text>
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text
               style={[
-                styles.cardSide,
-                { transform: [{ rotateY: backRotation }] },
+                styles.cardText,
+                { color: showAnswer ? answerTextColor : questionTextColor },
               ]}
             >
-              <View style={styles.cardHeader}>
-                <ThemedText style={[styles.cardType, { color: colors.tint }]}>
-                  Answer
-                </ThemedText>
-              </View>
-              <View style={styles.cardContent}>
-                <ThemedText style={styles.cardText}>
-                  {currentCard.answer}
-                </ThemedText>
-              </View>
-            </Animated.View>
-          )}
+              {showAnswer ? currentCard.answer : currentCard.question}
+            </Text>
+          </View>
+
+          {/* Card bottom accent */}
+          <View
+            style={[
+              styles.cardAccent,
+              { backgroundColor: showAnswer ? "#5BB318" : "#2E7CD6" },
+            ]}
+          />
         </Animated.View>
 
+        {/* Buttons below the card */}
         {!showAnswer ? (
           <TouchableOpacity
             style={[styles.showAnswerButton, { backgroundColor: colors.tint }]}
@@ -334,32 +333,20 @@ export default function StudyScreen() {
                   description: "Complete blackout",
                 },
                 {
-                  quality: 1,
-                  label: "Hard",
-                  color: "#ff6b7a",
-                  description: "Incorrect; correct seemed easy",
-                },
-                {
-                  quality: 2,
-                  label: "Good",
-                  color: "#ffa726",
-                  description: "Incorrect; but remembered",
-                },
-                {
                   quality: 3,
-                  label: "Easy",
-                  color: "#26c6da",
-                  description: "Correct with serious difficulty",
+                  label: "Hard",
+                  color: "#ffa726",
+                  description: "Correct with difficulty",
                 },
                 {
                   quality: 4,
-                  label: "Perfect",
+                  label: "Good",
                   color: "#66bb6a",
                   description: "Correct after hesitation",
                 },
                 {
                   quality: 5,
-                  label: "Excellent",
+                  label: "Easy",
                   color: "#4caf50",
                   description: "Perfect response",
                 },
@@ -501,37 +488,63 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   card: {
-    borderRadius: 24,
-    padding: 32,
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 32,
-    minHeight: 300,
+    minHeight: 320,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+    justifyContent: "space-between",
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
-  cardSide: {
-    flex: 1,
+  cardCorner: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 40,
+    height: 40,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    opacity: 0.8,
   },
   cardHeader: {
-    marginBottom: 24,
+    marginBottom: 20,
     alignItems: "center",
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.3)",
   },
   cardType: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 2,
+    opacity: 0.9,
   },
   cardContent: {
     flex: 1,
     justifyContent: "center",
+    paddingVertical: 16,
   },
   cardText: {
-    fontSize: 18,
-    lineHeight: 28,
+    fontSize: 19,
+    lineHeight: 32,
     textAlign: "center",
+    fontWeight: "500",
+    textShadowColor: "rgba(0, 0, 0, 0.1)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardAccent: {
+    height: 4,
+    borderRadius: 2,
+    marginTop: 16,
+    marginHorizontal: 20,
+    opacity: 0.6,
   },
   showAnswerButton: {
     padding: 18,
@@ -558,7 +571,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   ratingButton: {
-    minWidth: 100,
+    minWidth: 80,
     padding: 12,
     borderRadius: 12,
     alignItems: "center",

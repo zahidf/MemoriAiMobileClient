@@ -20,6 +20,7 @@ import {
   deleteDeck,
   getDeckStats,
   getUserDecks,
+  resetDeckForStudy, // Add this import
 } from "../../services/deckService";
 import type { Deck } from "../../types";
 
@@ -61,7 +62,7 @@ export default function HomeScreen() {
           const stats = await getDeckStats(deck.id!);
           return {
             ...deck,
-            card_count: deck.card_count || 0, // Ensure card_count is always a number
+            card_count: deck.card_count || 0,
             dueCards: stats.dueCards,
           };
         })
@@ -76,6 +77,11 @@ export default function HomeScreen() {
   };
 
   const handleDeleteDeck = (deck: DeckWithStatsLocal) => {
+    if (!deck.id) {
+      Alert.alert("Error", "Deck ID is missing");
+      return;
+    }
+
     Alert.alert(
       "Delete Deck",
       `Are you sure you want to delete "${deck.title}"? This will delete all cards in the deck.`,
@@ -87,7 +93,7 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               await deleteDeck(deck.id!);
-              loadUserDecks(); // Refresh the list
+              loadUserDecks();
             } catch (error) {
               console.error("Failed to delete deck:", error);
               Alert.alert("Error", "Failed to delete deck");
@@ -98,7 +104,39 @@ export default function HomeScreen() {
     );
   };
 
+  const handleResetDeckForStudy = (deck: DeckWithStatsLocal) => {
+    if (!deck.id) {
+      Alert.alert("Error", "Deck ID is missing");
+      return;
+    }
+
+    Alert.alert(
+      "Reset Deck for Study",
+      `Reset all cards in "${deck.title}" to be available for study?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          onPress: async () => {
+            try {
+              await resetDeckForStudy(deck.id!);
+              loadUserDecks(); // Refresh to show updated due cards
+              Alert.alert("Success", "All cards are now available for study!");
+            } catch (error) {
+              console.error("Failed to reset deck:", error);
+              Alert.alert("Error", "Failed to reset deck");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleStudyDeck = (deck: DeckWithStatsLocal) => {
+    if (!deck.id) {
+      Alert.alert("Error", "Deck ID is missing");
+      return;
+    }
     router.push(`./study?deckId=${deck.id}`);
   };
 
@@ -210,10 +248,27 @@ export default function HomeScreen() {
                         • {deck.dueCards} due
                       </ThemedText>
                     )}
+                    {deck.dueCards === 0 && deck.card_count > 0 && (
+                      <ThemedText
+                        style={[styles.noDueStat, { color: "#ff6b35" }]}
+                      >
+                        • no cards due
+                      </ThemedText>
+                    )}
                   </View>
                 </View>
 
                 <View style={styles.deckActions}>
+                  {/* Reset button for development */}
+                  {__DEV__ && deck.card_count > 0 && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.resetButton]}
+                      onPress={() => handleResetDeckForStudy(deck)}
+                    >
+                      <IconSymbol name="clock.fill" size={16} color="#ff6b35" />
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity
                     style={[styles.actionButton, styles.deleteButton]}
                     onPress={() => handleDeleteDeck(deck)}
@@ -226,8 +281,10 @@ export default function HomeScreen() {
                       styles.actionButton,
                       styles.studyButton,
                       { backgroundColor: colors.tint },
+                      deck.card_count === 0 && styles.disabledButton,
                     ]}
                     onPress={() => handleStudyDeck(deck)}
+                    disabled={deck.card_count === 0}
                   >
                     <ThemedText style={styles.studyButtonText}>
                       Study
@@ -370,21 +427,32 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
+  noDueStat: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
   deckActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   actionButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
+  resetButton: {
+    backgroundColor: "transparent",
+  },
   deleteButton: {
     backgroundColor: "transparent",
   },
   studyButton: {
     paddingHorizontal: 16,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   studyButtonText: {
     color: "white",
