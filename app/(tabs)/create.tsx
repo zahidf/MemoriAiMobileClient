@@ -259,7 +259,7 @@ export default function CreateScreen() {
       if (data.status === "completed") {
         setLoading(false);
         // Navigate to review-cards instead of direct success
-        router.push(`/../review-cards?taskId=${id}&method=${selectedMethod}`);
+        router.push(`/review-cards?taskId=${id}&method=${selectedMethod}`);
       } else if (data.status === "failed") {
         setLoading(false);
         Alert.alert("Error", data.message || "Processing failed");

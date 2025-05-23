@@ -16,13 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const API_BASE_URL = "https://memori-ai.com"; // Replace with your API URL
-
-interface QAPair {
-  question: string;
-  answer: string;
-}
+import { getCurrentUser } from "../services/authService";
+import { addCardsToDeck, createDeck } from "../services/deckService";
+import type { QAPair } from "../types";
 
 export default function ReviewCardsScreen() {
   const { taskId, method } = useLocalSearchParams<{
@@ -38,6 +34,8 @@ export default function ReviewCardsScreen() {
   const [creating, setCreating] = useState(false);
   const [deckTitle, setDeckTitle] = useState("My Flashcards");
   const [showTitleModal, setShowTitleModal] = useState(false);
+
+  const API_BASE_URL = "https://memori-ai.com";
 
   useEffect(() => {
     if (taskId && method !== "manual") {
@@ -55,7 +53,6 @@ export default function ReviewCardsScreen() {
           setLoading(false);
         }
       } else {
-        // Fallback: start with empty cards
         setQaPairs([{ question: "", answer: "" }]);
         setLoading(false);
       }
@@ -122,7 +119,7 @@ export default function ReviewCardsScreen() {
     setCurrentIndex(qaPairs.length);
   };
 
-  const createDeck = async () => {
+  const createDeckLocally = async () => {
     // Validate cards
     const invalidCards = qaPairs.filter(
       (card) => !card.question.trim() || !card.answer.trim()
@@ -136,66 +133,44 @@ export default function ReviewCardsScreen() {
       return;
     }
 
+    if (!deckTitle.trim()) {
+      Alert.alert("Error", "Please enter a deck title");
+      return;
+    }
+
     setCreating(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/generate-deck`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      // Get current user
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        Alert.alert("Error", "No user found. Please sign in again.");
+        setCreating(false);
+        return;
+      }
+
+      // Create deck in local database
+      const deck = await createDeck(user.id, deckTitle.trim());
+
+      // Add cards to the deck
+      await addCardsToDeck(deck.id!, qaPairs);
+
+      setCreating(false);
+
+      Alert.alert("Success!", "Your deck has been created successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            // Navigate back to home screen
+            router.dismissAll();
+            router.replace("/(tabs)");
+          },
         },
-        body: JSON.stringify({
-          title: deckTitle,
-          qa_pairs: qaPairs,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.task_id) {
-        pollDeckCreation(data.task_id);
-      }
+      ]);
     } catch (error) {
       console.error("Create deck error:", error);
       Alert.alert("Error", "Failed to create deck");
       setCreating(false);
-    }
-  };
-
-  const pollDeckCreation = async (id: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/status/${id}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status === "completed") {
-        setCreating(false);
-        Alert.alert(
-          "Success!",
-          "Your Anki deck has been created successfully.",
-          [
-            {
-              text: "OK",
-              onPress: () => router.back(),
-            },
-          ]
-        );
-      } else if (data.status === "failed") {
-        setCreating(false);
-        Alert.alert("Error", data.message || "Failed to create deck");
-      } else {
-        setTimeout(() => pollDeckCreation(id), 1000);
-      }
-    } catch (error) {
-      setCreating(false);
-      Alert.alert("Error", "Failed to check deck creation status");
     }
   };
 
@@ -373,7 +348,7 @@ export default function ReviewCardsScreen() {
           ) : (
             <>
               <IconSymbol name="checkmark" size={20} color="white" />
-              <Text style={styles.createButtonText}>Create Anki Deck</Text>
+              <Text style={styles.createButtonText}>Save Deck</Text>
             </>
           )}
         </TouchableOpacity>
@@ -420,7 +395,7 @@ export default function ReviewCardsScreen() {
                 style={[styles.modalButton, { backgroundColor: colors.tint }]}
                 onPress={() => {
                   setShowTitleModal(false);
-                  createDeck();
+                  createDeckLocally();
                 }}
               >
                 <Text style={styles.modalButtonText}>Create</Text>
