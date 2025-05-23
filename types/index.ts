@@ -45,6 +45,7 @@ export interface DeckWithStats extends Deck {
   dueCards: number;
   newCards?: number;
   reviewCards?: number;
+  nextDueTime?: Date;
 }
 
 // SM-2 Algorithm Types
@@ -126,6 +127,7 @@ export interface DeckStatistics {
   averageEaseFactor?: number;
   averageInterval?: number;
   retentionRate?: number;
+  nextDueTime?: Date;
 }
 
 export interface UserProgress {

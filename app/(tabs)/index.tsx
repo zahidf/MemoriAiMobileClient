@@ -18,15 +18,18 @@ import {
 import { getCurrentUser } from "../../services/authService";
 import {
   deleteDeck,
+  formatTimeUntilDue,
   getDeckStats,
   getUserDecks,
-  resetDeckForStudy, // Add this import
+  hasDueCards,
+  resetDeckForStudy,
 } from "../../services/deckService";
 import type { Deck } from "../../types";
 
 interface DeckWithStatsLocal extends Deck {
   card_count: number;
   dueCards: number;
+  nextDueTime?: Date;
 }
 
 export default function HomeScreen() {
@@ -64,6 +67,7 @@ export default function HomeScreen() {
             ...deck,
             card_count: deck.card_count || 0,
             dueCards: stats.dueCards,
+            nextDueTime: stats.nextDueTime,
           };
         })
       );
@@ -132,12 +136,68 @@ export default function HomeScreen() {
     );
   };
 
-  const handleStudyDeck = (deck: DeckWithStatsLocal) => {
+  const handleStudyDeck = async (deck: DeckWithStatsLocal) => {
     if (!deck.id) {
       Alert.alert("Error", "Deck ID is missing");
       return;
     }
+
+    // Check if there are actually cards due for study
+    const hasDue = await hasDueCards(deck.id);
+
+    if (!hasDue) {
+      // Show when next cards will be due
+      if (deck.nextDueTime) {
+        const timeUntilDue = formatTimeUntilDue(deck.nextDueTime);
+        Alert.alert(
+          "All Cards Studied",
+          `Great job! You've completed all due cards for today.\n\nNext review in: ${timeUntilDue}`,
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert(
+          "All Cards Studied",
+          "Great job! You've completed all cards in this deck.",
+          [{ text: "OK" }]
+        );
+      }
+      return;
+    }
+
     router.push(`./study?deckId=${deck.id}`);
+  };
+
+  const getDeckStatus = (deck: DeckWithStatsLocal) => {
+    if (deck.card_count === 0) {
+      return {
+        text: "No cards",
+        color: colors.text + "60",
+        canStudy: false,
+      };
+    }
+
+    if (deck.dueCards > 0) {
+      return {
+        text: `${deck.dueCards} due`,
+        color: colors.tint,
+        canStudy: true,
+      };
+    }
+
+    if (deck.nextDueTime) {
+      const timeUntilDue = formatTimeUntilDue(deck.nextDueTime);
+      return {
+        text: `Next: ${timeUntilDue}`,
+        color: "#ff6b35",
+        canStudy: false,
+      };
+    }
+
+    return {
+      text: "All studied",
+      color: "#4caf50",
+      canStudy: false,
+    };
   };
 
   const methods = [
@@ -223,76 +283,87 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
 
-            {decks.map((deck) => (
-              <View
-                key={deck.id}
-                style={[
-                  styles.deckCard,
-                  { backgroundColor: colors.background },
-                ]}
-              >
-                <View style={styles.deckInfo}>
-                  <ThemedText type="defaultSemiBold" style={styles.deckTitle}>
-                    {deck.title}
-                  </ThemedText>
-                  <View style={styles.deckStats}>
-                    <ThemedText
-                      style={[styles.deckStat, { color: colors.text + "70" }]}
-                    >
-                      {deck.card_count} cards
+            {decks.map((deck) => {
+              const status = getDeckStatus(deck);
+
+              return (
+                <View
+                  key={deck.id}
+                  style={[
+                    styles.deckCard,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <View style={styles.deckInfo}>
+                    <ThemedText type="defaultSemiBold" style={styles.deckTitle}>
+                      {deck.title}
                     </ThemedText>
-                    {deck.dueCards > 0 && (
+                    <View style={styles.deckStats}>
                       <ThemedText
-                        style={[styles.dueStat, { color: colors.tint }]}
+                        style={[styles.deckStat, { color: colors.text + "70" }]}
                       >
-                        • {deck.dueCards} due
+                        {deck.card_count} cards
                       </ThemedText>
-                    )}
-                    {deck.dueCards === 0 && deck.card_count > 0 && (
                       <ThemedText
-                        style={[styles.noDueStat, { color: "#ff6b35" }]}
+                        style={[styles.statusText, { color: status.color }]}
                       >
-                        • no cards due
+                        • {status.text}
                       </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.deckActions}>
+                    {/* Reset button for development */}
+                    {__DEV__ && deck.card_count > 0 && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.resetButton]}
+                        onPress={() => handleResetDeckForStudy(deck)}
+                      >
+                        <IconSymbol
+                          name="clock.fill"
+                          size={16}
+                          color="#ff6b35"
+                        />
+                      </TouchableOpacity>
                     )}
+
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => handleDeleteDeck(deck)}
+                    >
+                      <IconSymbol name="trash" size={16} color="#ff4757" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        styles.studyButton,
+                        {
+                          backgroundColor: status.canStudy
+                            ? colors.tint
+                            : colors.text + "20",
+                        },
+                        !status.canStudy && styles.disabledButton,
+                      ]}
+                      onPress={() => handleStudyDeck(deck)}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.studyButtonText,
+                          {
+                            color: status.canStudy
+                              ? "white"
+                              : colors.text + "60",
+                          },
+                        ]}
+                      >
+                        {status.canStudy ? "Study" : "Studied"}
+                      </ThemedText>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={styles.deckActions}>
-                  {/* Reset button for development */}
-                  {__DEV__ && deck.card_count > 0 && (
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.resetButton]}
-                      onPress={() => handleResetDeckForStudy(deck)}
-                    >
-                      <IconSymbol name="clock.fill" size={16} color="#ff6b35" />
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteDeck(deck)}
-                  >
-                    <IconSymbol name="trash" size={16} color="#ff4757" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      styles.studyButton,
-                      { backgroundColor: colors.tint },
-                      deck.card_count === 0 && styles.disabledButton,
-                    ]}
-                    onPress={() => handleStudyDeck(deck)}
-                    disabled={deck.card_count === 0}
-                  >
-                    <ThemedText style={styles.studyButtonText}>
-                      Study
-                    </ThemedText>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -422,12 +493,7 @@ const styles = StyleSheet.create({
   deckStat: {
     fontSize: 14,
   },
-  dueStat: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  noDueStat: {
+  statusText: {
     fontSize: 14,
     fontWeight: "600",
     marginLeft: 4,
@@ -452,10 +518,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   disabledButton: {
-    opacity: 0.5,
+    opacity: 0.8,
   },
   studyButtonText: {
-    color: "white",
     fontSize: 14,
     fontWeight: "600",
   },
