@@ -97,7 +97,6 @@ export default function CreateScreen() {
     if (!selectedMethod) return;
 
     setLoading(true);
-    setProgress(0);
 
     try {
       let response;
@@ -128,7 +127,7 @@ export default function CreateScreen() {
           response = await processYoutube();
           break;
         case "manual":
-          // Validate manual cards
+          // For manual method, go directly to review-cards
           const validCards = manualCards.filter(
             (card) => card.question.trim() && card.answer.trim()
           );
@@ -140,9 +139,12 @@ export default function CreateScreen() {
             setLoading(false);
             return;
           }
-          // Create deck directly with manual cards
-          response = await createManualDeck(validCards);
-          break;
+          setLoading(false);
+          router.push({
+            pathname: "../review-cards",
+            params: { method: "manual", cards: JSON.stringify(validCards) },
+          });
+          return;
       }
 
       if (response?.task_id) {
@@ -223,27 +225,6 @@ export default function CreateScreen() {
     return response.json();
   };
 
-  const createManualDeck = async (
-    cards: Array<{ question: string; answer: string }>
-  ) => {
-    const response = await fetch(`${API_BASE_URL}/generate-deck`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: "Manual Flashcards",
-        qa_pairs: cards,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  };
-
   const addManualCard = () => {
     setManualCards([...manualCards, { question: "", answer: "" }]);
   };
@@ -277,7 +258,8 @@ export default function CreateScreen() {
 
       if (data.status === "completed") {
         setLoading(false);
-        router.push(`/../review-cards?taskId=${id}`);
+        // Navigate to review-cards instead of direct success
+        router.push(`/../review-cards?taskId=${id}&method=${selectedMethod}`);
       } else if (data.status === "failed") {
         setLoading(false);
         Alert.alert("Error", data.message || "Processing failed");
@@ -501,7 +483,7 @@ export default function CreateScreen() {
             ) : (
               <Text style={styles.submitButtonText}>
                 {selectedMethod === "manual"
-                  ? "Create Manual Deck"
+                  ? "Review Cards"
                   : "Generate Flashcards"}
               </Text>
             )}
@@ -781,15 +763,5 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: "500",
-  },
-  testButton: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  testButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
   },
 });

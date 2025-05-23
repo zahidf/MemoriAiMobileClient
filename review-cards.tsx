@@ -43,9 +43,22 @@ export default function ReviewCardsScreen() {
     if (taskId && method !== "manual") {
       fetchQAPairs();
     } else if (method === "manual") {
-      // For manual method, start with empty cards
-      setQaPairs([{ question: "", answer: "" }]);
-      setLoading(false);
+      const { cards } = useLocalSearchParams<{ cards?: string }>();
+      if (cards) {
+        try {
+          const parsedCards = JSON.parse(cards);
+          setQaPairs(parsedCards);
+          setLoading(false);
+        } catch (error) {
+          console.error("Error parsing manual cards:", error);
+          setQaPairs([{ question: "", answer: "" }]);
+          setLoading(false);
+        }
+      } else {
+        // Fallback: start with empty cards
+        setQaPairs([{ question: "", answer: "" }]);
+        setLoading(false);
+      }
     }
   }, [taskId, method]);
 
