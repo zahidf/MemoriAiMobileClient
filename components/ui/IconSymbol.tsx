@@ -1,23 +1,47 @@
 // Fallback for using MaterialIcons on Android and web.
 
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
-import { ComponentProps } from 'react';
-import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { SymbolViewProps, SymbolWeight } from "expo-symbols";
+import { ComponentProps } from "react";
+import { OpaqueColorValue, type StyleProp, type TextStyle } from "react-native";
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type IconMapping = Record<
+  SymbolViewProps["name"],
+  ComponentProps<typeof MaterialIcons>["name"]
+>;
 type IconSymbolName = keyof typeof MAPPING;
 
 /**
  * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
+ * Updated for MemoriAI with additional icons.
  */
 const MAPPING = {
-  'house.fill': 'home',
-  'paperplane.fill': 'send',
-  'chevron.left.forwardslash.chevron.right': 'code',
-  'chevron.right': 'chevron-right',
+  "house.fill": "home",
+  "paperplane.fill": "send",
+  "chevron.left.forwardslash.chevron.right": "code",
+  "chevron.right": "chevron-right",
+  "chevron.left": "chevron-left",
+  plus: "add",
+  "clock.fill": "schedule",
+  "person.fill": "person",
+  "doc.fill": "description",
+  "text.alignleft": "text-fields",
+  "play.fill": "play-arrow",
+  pencil: "edit",
+  checkmark: "check",
+  "checkmark.circle.fill": "check-circle",
+  trash: "delete",
+  folder: "folder",
+  "folder.fill": "folder",
+  "doc.text.fill": "article",
+  "flame.fill": "local-fire-department",
+  "bell.fill": "notifications",
+  "icloud.fill": "cloud",
+  "moon.fill": "nightlight",
+  "square.and.arrow.up": "share",
+  "star.fill": "star",
+  "envelope.fill": "mail",
+  "info.circle.fill": "info",
 } as IconMapping;
 
 /**
@@ -37,5 +61,12 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+  return (
+    <MaterialIcons
+      color={color}
+      size={size}
+      name={MAPPING[name]}
+      style={style}
+    />
+  );
 }
