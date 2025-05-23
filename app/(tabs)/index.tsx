@@ -3,6 +3,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -258,7 +259,12 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <ThemedText type="title" style={styles.title}>
-            MemoriAI
+            <Image
+              style={styles.image}
+              source={require("../../assets/images/logo.png")}
+              contentFit="cover"
+              transition={1000}
+            />
           </ThemedText>
           {user && (
             <ThemedText
@@ -564,5 +570,9 @@ const styles = StyleSheet.create({
   methodDescription: {
     fontSize: 14,
     color: "rgba(255, 255, 255, 0.8)",
+  },
+  image: {
+    width: 200,
+    height: 70,
   },
 });
