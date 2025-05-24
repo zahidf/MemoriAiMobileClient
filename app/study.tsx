@@ -4,7 +4,7 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -52,12 +52,25 @@ export default function StudyScreen() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [displayedCard, setDisplayedCard] = useState<LearningCard | null>(null);
 
+  // Timer for checking learning cards
+  const timerRef = useRef<number | null>(null);
+
   useEffect(() => {
     loadDueCards();
+
+    // Set up timer to check for learning cards every 30 seconds
+    timerRef.current = setInterval(() => {
+      checkForNewlyDueCards();
+    }, 30000); // Check every 30 seconds
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, [deckId]);
 
   // Update displayed card when available cards change or current index changes
-  // BUT only when we're not showing an answer (to prevent answer flash)
   useEffect(() => {
     const availableCards = getAvailableCards();
     if (
@@ -69,12 +82,35 @@ export default function StudyScreen() {
     }
   }, [allCards, currentCardIndex, showAnswer]);
 
+  // Check if any learning cards have become due
+  const checkForNewlyDueCards = () => {
+    const now = new Date();
+    const availableCards = getAvailableCards();
+    const learningCardsReady = allCards.filter(
+      (card) =>
+        card.isLearning &&
+        card.nextReviewTime <= now &&
+        !availableCards.some((available) => available.id === card.id)
+    );
+
+    if (learningCardsReady.length > 0) {
+      console.log(`${learningCardsReady.length} learning cards are now ready`);
+      // Force a re-render by updating the state slightly
+      setAllCards((prevCards) => [...prevCards]);
+    }
+  };
+
   // Get cards that are ready to be studied right now
   const getAvailableCards = (): LearningCard[] => {
     const now = new Date();
-    return allCards
+    const available = allCards
       .filter((card) => card.nextReviewTime <= now)
       .sort((a, b) => a.nextReviewTime.getTime() - b.nextReviewTime.getTime());
+
+    console.log(
+      `Available cards: ${available.length} out of ${allCards.length} total`
+    );
+    return available;
   };
 
   const loadDueCards = async () => {
@@ -93,6 +129,7 @@ export default function StudyScreen() {
           card.repetitions === 0 || card.interval_days < GRADUATION_INTERVAL, // Learning if new or interval < 1 day
       }));
 
+      console.log(`Loaded ${learningCards.length} due cards`);
       setAllCards(learningCards);
 
       if (learningCards.length === 0) {
@@ -140,17 +177,21 @@ export default function StudyScreen() {
     try {
       let newCard: LearningCard = { ...currentCard };
 
+      console.log(
+        `Processing quality ${quality} for card ${currentCard.id}, learning step ${currentCard.learningStep}, isLearning: ${currentCard.isLearning}`
+      );
+
       if (currentCard.isLearning) {
         // Handle learning phase
         if (quality >= 3) {
           // Correct answer in learning phase
           if (quality === 5) {
-            // Easy - graduate immediately
+            // Easy - graduate immediately to review phase
             const sm2Result = calculateSM2({
               quality: 4, // Treat as "Good" for SM-2 calculation
-              repetitions: currentCard.repetitions,
+              repetitions: 1, // First repetition
               previousEaseFactor: currentCard.ease_factor,
-              previousInterval: currentCard.interval_days,
+              previousInterval: 0,
             });
 
             newCard = {
@@ -173,9 +214,16 @@ export default function StudyScreen() {
               interval_days: newCard.interval_days,
               due_date: calculateDueDateString(newCard.interval_days),
             });
+
+            console.log(
+              `Card ${currentCard.id} graduated with Easy - interval ${EASY_INTERVAL} days`
+            );
           } else {
             // Good/Hard - advance to next learning step
             const nextStep = currentCard.learningStep + 1;
+            console.log(
+              `Advancing from step ${currentCard.learningStep} to step ${nextStep}`
+            );
 
             if (nextStep >= LEARNING_STEPS.length) {
               // Graduate to review phase
@@ -206,6 +254,10 @@ export default function StudyScreen() {
                 interval_days: newCard.interval_days,
                 due_date: calculateDueDateString(newCard.interval_days),
               });
+
+              console.log(
+                `Card ${currentCard.id} graduated to review phase - interval ${GRADUATION_INTERVAL} day`
+              );
             } else {
               // Stay in learning, advance to next step
               const nextReviewMinutes = LEARNING_STEPS[nextStep];
@@ -216,6 +268,10 @@ export default function StudyScreen() {
                   Date.now() + nextReviewMinutes * 60 * 1000
                 ),
               };
+
+              console.log(
+                `Card ${currentCard.id} advanced to learning step ${nextStep}, next review in ${nextReviewMinutes} minutes`
+              );
             }
           }
         } else {
@@ -227,6 +283,10 @@ export default function StudyScreen() {
               Date.now() + LEARNING_STEPS[0] * 60 * 1000
             ),
           };
+
+          console.log(
+            `Card ${currentCard.id} restarted learning - next review in ${LEARNING_STEPS[0]} minutes`
+          );
         }
       } else {
         // Handle review phase (cards with interval >= 1 day)
@@ -257,6 +317,10 @@ export default function StudyScreen() {
             interval_days: newCard.interval_days,
             due_date: calculateDueDateString(newCard.interval_days),
           });
+
+          console.log(
+            `Review card ${currentCard.id} scheduled for ${sm2Result.interval} days`
+          );
         } else {
           // Wrong - back to learning
           newCard = {
@@ -278,6 +342,8 @@ export default function StudyScreen() {
             interval_days: 0,
             due_date: new Date().toISOString(), // Due now
           });
+
+          console.log(`Review card ${currentCard.id} sent back to learning`);
         }
       }
 
@@ -302,16 +368,31 @@ export default function StudyScreen() {
 
       setCardsStudied(cardsStudied + 1);
 
-      // Immediate transition - no delays
-      const nextAvailableCards = getAvailableCards();
-      if (nextAvailableCards.length === 0) {
-        setSessionComplete(true);
-      } else {
-        // Update both states together in the same batch
+      // Move to next available card
+      setTimeout(() => {
+        const nextAvailableCards = getAvailableCards();
+        if (nextAvailableCards.length === 0) {
+          // Check if there are learning cards that will become available soon
+          const learningCards = allCards.filter(
+            (card) => card.isLearning && card.nextReviewTime > new Date()
+          );
+
+          if (learningCards.length > 0) {
+            // Don't end session yet, learning cards will become available
+            console.log(
+              `No cards available now, but ${learningCards.length} learning cards will be ready soon`
+            );
+            setSessionComplete(false);
+          } else {
+            setSessionComplete(true);
+          }
+        } else {
+          // Continue with next card
+          setCurrentCardIndex(0);
+        }
         setShowAnswer(false);
-        setCurrentCardIndex(0);
-      }
-      setIsTransitioning(false);
+        setIsTransitioning(false);
+      }, 200); // Small delay for animation
     } catch (error) {
       console.error("Failed to update card:", error);
       Alert.alert("Error", "Failed to save your progress");
@@ -369,12 +450,14 @@ export default function StudyScreen() {
   }
 
   const availableCards = getAvailableCards();
+  const learningCardsCount = allCards.filter(
+    (card) => card.isLearning && card.nextReviewTime > new Date()
+  ).length;
 
-  if (sessionComplete || availableCards.length === 0) {
-    const learningCardsCount = allCards.filter(
-      (card) => card.isLearning && card.nextReviewTime > new Date()
-    ).length;
-
+  if (
+    sessionComplete ||
+    (availableCards.length === 0 && learningCardsCount === 0)
+  ) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.header}>
@@ -399,9 +482,7 @@ export default function StudyScreen() {
           >
             <Text style={styles.completionIcon}>🎉</Text>
             <ThemedText type="subtitle" style={styles.completionTitle}>
-              {availableCards.length === 0
-                ? "All Caught Up!"
-                : "Session Complete!"}
+              Session Complete!
             </ThemedText>
             <ThemedText
               style={[styles.completionText, { color: colors.text + "80" }]}
@@ -409,12 +490,93 @@ export default function StudyScreen() {
               You studied {cardsStudied} cards. Great job!
             </ThemedText>
 
-            {learningCardsCount > 0 && (
+            <View style={styles.completionButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.completionButton,
+                  styles.secondaryButton,
+                  { borderColor: colors.tint },
+                ]}
+                onPress={() => router.back()}
+              >
+                <ThemedText style={[styles.buttonText, { color: colors.tint }]}>
+                  Back to Home
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.completionButton,
+                  { backgroundColor: colors.tint },
+                ]}
+                onPress={resetSession}
+              >
+                <Text style={[styles.buttonText, { color: "white" }]}>
+                  Study Again
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Show waiting screen if no cards available but learning cards exist
+  if (availableCards.length === 0 && learningCardsCount > 0) {
+    const nextDueCard = allCards
+      .filter((card) => card.isLearning && card.nextReviewTime > new Date())
+      .sort(
+        (a, b) => a.nextReviewTime.getTime() - b.nextReviewTime.getTime()
+      )[0];
+
+    const timeUntilNext = nextDueCard
+      ? Math.ceil(
+          (nextDueCard.nextReviewTime.getTime() - new Date().getTime()) / 1000
+        )
+      : 0;
+
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <IconSymbol name="chevron.left" size={24} color={colors.tint} />
+          </TouchableOpacity>
+          <ThemedText type="title" style={styles.headerTitle}>
+            Learning Break
+          </ThemedText>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.centerContent}>
+          <View
+            style={[
+              styles.completionCard,
+              { backgroundColor: colors.background },
+            ]}
+          >
+            <Text style={styles.completionIcon}>⏱️</Text>
+            <ThemedText type="subtitle" style={styles.completionTitle}>
+              Learning Cards in Progress
+            </ThemedText>
+            <ThemedText
+              style={[styles.completionText, { color: colors.text + "80" }]}
+            >
+              {learningCardsCount} card{learningCardsCount !== 1 ? "s" : ""}{" "}
+              will be ready soon.
+            </ThemedText>
+
+            {timeUntilNext > 0 && (
               <ThemedText
                 style={[styles.learningCardsText, { color: "#f39c12" }]}
               >
-                {learningCardsCount} card{learningCardsCount !== 1 ? "s" : ""}{" "}
-                still learning - they'll appear again shortly in this session.
+                Next card in{" "}
+                {timeUntilNext < 60
+                  ? `${timeUntilNext}s`
+                  : `${Math.ceil(timeUntilNext / 60)}m`}
               </ThemedText>
             )}
 
@@ -432,19 +594,20 @@ export default function StudyScreen() {
                 </ThemedText>
               </TouchableOpacity>
 
-              {learningCardsCount === 0 && (
-                <TouchableOpacity
-                  style={[
-                    styles.completionButton,
-                    { backgroundColor: colors.tint },
-                  ]}
-                  onPress={resetSession}
-                >
-                  <Text style={[styles.buttonText, { color: "white" }]}>
-                    Study Again
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={[
+                  styles.completionButton,
+                  { backgroundColor: colors.tint },
+                ]}
+                onPress={() => {
+                  // Force check for newly due cards
+                  checkForNewlyDueCards();
+                }}
+              >
+                <Text style={[styles.buttonText, { color: "white" }]}>
+                  Check Now
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -452,7 +615,7 @@ export default function StudyScreen() {
     );
   }
 
-  // Use displayedCard instead of currentCard to prevent content flashing
+  // Rest of your component remains the same...
   const currentCard =
     displayedCard ||
     (availableCards.length > 0 ? availableCards[currentCardIndex] : null);
@@ -490,6 +653,13 @@ export default function StudyScreen() {
           <ThemedText style={styles.progressText}>
             {currentCardIndex + 1} of {availableCards.length} available
           </ThemedText>
+          {learningCardsCount > 0 && (
+            <ThemedText
+              style={[styles.learningCardsText, { color: "#f39c12" }]}
+            >
+              + {learningCardsCount} learning
+            </ThemedText>
+          )}
           <ThemedText style={[styles.cardTypeText, { color: cardInfo.color }]}>
             {cardInfo.type} • {cardInfo.description}
           </ThemedText>
@@ -671,6 +841,7 @@ export default function StudyScreen() {
   );
 }
 
+// Styles remain the same as original...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -699,6 +870,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     marginBottom: 8,
+  },
+  learningCardsText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginBottom: 4,
   },
   progressBar: {
     width: "100%",
@@ -754,13 +930,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
     lineHeight: 24,
-  },
-  learningCardsText: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 32,
-    lineHeight: 20,
-    fontStyle: "italic",
   },
   completionButtons: {
     flexDirection: "row",
