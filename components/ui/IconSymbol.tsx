@@ -42,6 +42,8 @@ const MAPPING = {
   "star.fill": "star",
   "envelope.fill": "mail",
   "info.circle.fill": "info",
+  magnifyingglass: "search",
+  xmark: "close",
 } as IconMapping;
 
 /**

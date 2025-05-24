@@ -239,7 +239,7 @@ export default function HomeScreen() {
     },
   ];
 
-  // UPDATED: Direct navigation to create screen with method pre-selected
+  // Direct navigation to create screen with method pre-selected
   const handleMethodSelect = (methodId: string) => {
     router.push({
       pathname: "/(tabs)/create",
@@ -253,6 +253,9 @@ export default function HomeScreen() {
   // Calculate stats for the header
   const totalCards = decks.reduce((sum, deck) => sum + deck.card_count, 0);
   const totalDueCards = decks.reduce((sum, deck) => sum + deck.dueCards, 0);
+
+  // Get up to 3 decks for preview
+  const previewDecks = decks.slice(0, 3);
 
   if (loading) {
     return (
@@ -357,17 +360,35 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* My Decks Section */}
+        {/* My Decks Section - Show up to 3 decks */}
         {decks.length > 0 && (
           <View style={styles.decksSection}>
             <View style={styles.sectionHeader}>
               <ThemedText type="subtitle" style={styles.sectionTitle}>
                 My Decks
               </ThemedText>
+              {decks.length > 3 && (
+                <TouchableOpacity
+                  style={[
+                    styles.viewAllButton,
+                    { backgroundColor: colors.tint + "15" },
+                  ]}
+                  onPress={() => router.push("/(tabs)/decks")}
+                >
+                  <IconSymbol
+                    name="chevron.right"
+                    size={14}
+                    color={colors.tint}
+                  />
+                  <Text style={[styles.viewAllText, { color: colors.tint }]}>
+                    View All ({decks.length})
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.decksGrid}>
-              {decks.map((deck, deckIndex) => {
+              {previewDecks.map((deck, deckIndex) => {
                 const status = getDeckStatus(deck);
 
                 return (
@@ -540,6 +561,40 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {/* View All Decks Link - Always show if there are decks */}
+            {decks.length > 0 && (
+              <TouchableOpacity
+                style={[
+                  styles.viewAllDecksLink,
+                  { borderColor: colors.text + "20" },
+                ]}
+                onPress={() => router.push("/(tabs)/decks")}
+              >
+                <Text style={[styles.viewAllDecksText, { color: colors.tint }]}>
+                  {decks.length > 3
+                    ? `View All ${decks.length} Decks`
+                    : `View All Decks (${decks.length})`}
+                </Text>
+                <IconSymbol
+                  name="chevron.right"
+                  size={16}
+                  color={colors.tint}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Separator between Decks and Create Section */}
+        {decks.length > 0 && (
+          <View style={styles.sectionSeparator}>
+            <View
+              style={[
+                styles.separatorLine,
+                { backgroundColor: colors.text + "15" },
+              ]}
+            />
           </View>
         )}
 
@@ -596,7 +651,7 @@ export default function HomeScreen() {
                         opacity: 1,
                       },
                     ]}
-                    onPress={() => handleMethodSelect(method.id)} // UPDATED: Direct navigation
+                    onPress={() => handleMethodSelect(method.id)}
                     activeOpacity={0.8}
                   >
                     <LinearGradient
@@ -639,7 +694,7 @@ export default function HomeScreen() {
             <View style={styles.methodsSeparator}>
               <View
                 style={[
-                  styles.separatorLine,
+                  styles.methodSeparatorLine,
                   { backgroundColor: colors.text + "20" },
                 ]}
               />
@@ -657,7 +712,7 @@ export default function HomeScreen() {
               </View>
               <View
                 style={[
-                  styles.separatorLine,
+                  styles.methodSeparatorLine,
                   { backgroundColor: colors.text + "20" },
                 ]}
               />
@@ -677,7 +732,7 @@ export default function HomeScreen() {
                         opacity: 1,
                       },
                     ]}
-                    onPress={() => handleMethodSelect(method.id)} // UPDATED: Direct navigation
+                    onPress={() => handleMethodSelect(method.id)}
                     activeOpacity={0.8}
                   >
                     <View
@@ -746,7 +801,7 @@ export default function HomeScreen() {
   );
 }
 
-// Styles remain exactly the same as the original file
+// Updated styles with smaller gaps and new elements
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -839,27 +894,41 @@ const styles = StyleSheet.create({
   },
   decksSection: {
     paddingHorizontal: 24,
-    marginBottom: 40,
+    marginBottom: 16, // Reduced from 32 to 16
   },
   sectionHeader: {
-    marginBottom: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 22,
     fontWeight: "700",
   },
-  decksGrid: {
-    gap: 24,
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
   },
-  // Updated deck card styles for pile of cards effect
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  decksGrid: {
+    gap: 16, // Reduced from 24 to 16
+  },
+  // Deck card styles remain the same as original but with reduced gap
   deckCardContainer: {
-    marginBottom: 32,
+    marginBottom: 20, // Reduced from 32 to 20
     marginHorizontal: 8,
     position: "relative",
-    height: 180, // Increased to accommodate more visible layers
+    height: 180,
   },
-
-  // Background card layers for pile effect
+  // ... (all other deck card styles remain the same)
   cardLayer: {
     position: "absolute",
     left: 0,
@@ -874,7 +943,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(102, 126, 234, 0.25)",
   },
-
   cardLayer2: {
     top: 6,
     left: 4,
@@ -883,7 +951,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     borderColor: "rgba(102, 126, 234, 0.35)",
   },
-
   cardLayer3: {
     top: 12,
     left: 8,
@@ -892,8 +959,6 @@ const styles = StyleSheet.create({
     opacity: 0.65,
     borderColor: "rgba(102, 126, 234, 0.45)",
   },
-
-  // Main deck card (top layer)
   deckCard: {
     borderRadius: 16,
     padding: 20,
@@ -908,10 +973,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(102, 126, 234, 0.3)",
     justifyContent: "space-between",
-    zIndex: 3, // Ensure top layer is above others
+    zIndex: 3,
   },
-
-  // Corner fold effect to make it look more like a card
   cardCornerFold: {
     position: "absolute",
     top: 0,
@@ -921,14 +984,12 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "45deg" }],
     borderTopRightRadius: 16,
   },
-
   deckHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 12,
   },
-
   deckIconContainer: {
     width: 36,
     height: 36,
@@ -936,45 +997,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   deckMenuButton: {
     padding: 6,
   },
-
   deckContent: {
     flex: 1,
     justifyContent: "space-between",
   },
-
   deckTitle: {
     fontSize: 16,
     lineHeight: 20,
     marginBottom: 8,
   },
-
   deckStats: {
     marginBottom: 8,
   },
-
   deckStat: {
     fontSize: 13,
   },
-
   statusBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
   },
-
   statusText: {
     fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-
-  // Card count indicator on the right side
   cardCountIndicator: {
     position: "absolute",
     right: 8,
@@ -982,31 +1034,26 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -20 }],
     alignItems: "center",
   },
-
   cardCountLine: {
     width: 3,
     height: 8,
     marginVertical: 1,
     borderRadius: 1.5,
   },
-
   cardCountLineThicker: {
     width: 4,
     height: 10,
   },
-
   cardCountText: {
     fontSize: 9,
     fontWeight: "600",
     marginTop: 2,
   },
-
   studyOverlay: {
     position: "absolute",
     top: 12,
     right: 12,
   },
-
   studyBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1015,18 +1062,43 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 3,
   },
-
   studyBadgeText: {
     color: "white",
     fontSize: 9,
     fontWeight: "600",
     textTransform: "uppercase",
   },
+  // New styles for View All Decks link
+  viewAllDecksLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    marginTop: 8,
+    gap: 8,
+  },
+  viewAllDecksText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  // Section separator
+  sectionSeparator: {
+    paddingHorizontal: 24,
+    marginVertical: 16, // Reduced from 32 to 16
+  },
+  separatorLine: {
+    height: 1,
+    width: "100%",
+  },
+  // Methods container and other styles remain the same
   methodsContainer: {
     paddingHorizontal: 24,
     marginBottom: 32,
   },
-  // AI Section Header styles
   aiSectionHeader: {
     marginBottom: 8,
     paddingHorizontal: 0,
@@ -1075,8 +1147,8 @@ const styles = StyleSheet.create({
     marginVertical: 24,
     paddingHorizontal: 20,
   },
-  separatorLine: {
-    flex: 1,
+  methodSeparatorLine: {
+    width: 110,
     height: 1,
   },
   separatorTextContainer: {
@@ -1193,7 +1265,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-  // Manual Entry - Paper/Notebook Theme
   manualCard: {
     borderRadius: 12,
     overflow: "hidden",

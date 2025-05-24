@@ -90,6 +90,11 @@ export default function CreateScreen() {
 
   const currentMethodConfig = methods.find((m) => m.id === selectedMethod);
 
+  // Handle method selection from the method grid
+  const handleMethodSelection = (methodId: CreationMethod) => {
+    setSelectedMethod(methodId);
+  };
+
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -701,8 +706,8 @@ export default function CreateScreen() {
     );
   };
 
-  // Show method selection if no method was passed or skipSelection is false
-  const shouldShowMethodSelection = !selectedMethod || skipSelection !== "true";
+  // Determine what to show - method selection or form
+  const shouldShowMethodSelection = !selectedMethod;
 
   return (
     <ThemedView style={styles.container}>
@@ -756,7 +761,7 @@ export default function CreateScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {shouldShowMethodSelection ? (
-          // Method Selection (fallback for direct navigation)
+          // Method Selection
           <View style={styles.methodSelection}>
             <View style={styles.selectionHeader}>
               <Text style={[styles.selectionTitle, { color: colors.text }]}>
@@ -777,7 +782,7 @@ export default function CreateScreen() {
                 <TouchableOpacity
                   key={method.id}
                   style={styles.methodCard}
-                  onPress={() => setSelectedMethod(method.id)}
+                  onPress={() => handleMethodSelection(method.id)}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -920,7 +925,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Method Selection Styles (fallback)
+  // Method Selection Styles
   methodSelection: {
     padding: 24,
   },
