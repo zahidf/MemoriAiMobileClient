@@ -5,7 +5,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,10 +18,39 @@ import {
   View,
 } from "react-native";
 
-// API Configuration
 const API_BASE_URL = "https://memori-ai.com";
 
 type CreationMethod = "pdf" | "text" | "youtube" | "manual" | null;
+
+const PROGRESS_STAGES = {
+  pdf: [
+    { stage: "Uploading document...", duration: 2000, progressEnd: 15 },
+    { stage: "Processing PDF content...", duration: 3000, progressEnd: 35 },
+    { stage: "Extracting text...", duration: 2000, progressEnd: 55 },
+    { stage: "Analyzing content with AI...", duration: 4000, progressEnd: 80 },
+    { stage: "Generating flashcards...", duration: 3000, progressEnd: 95 },
+    { stage: "Finalizing...", duration: 1000, progressEnd: 100 },
+  ],
+  text: [
+    { stage: "Processing your content...", duration: 1500, progressEnd: 20 },
+    { stage: "Analyzing text structure...", duration: 2000, progressEnd: 45 },
+    {
+      stage: "Generating questions with AI...",
+      duration: 4000,
+      progressEnd: 75,
+    },
+    { stage: "Creating flashcards...", duration: 2000, progressEnd: 90 },
+    { stage: "Finalizing...", duration: 1000, progressEnd: 100 },
+  ],
+  youtube: [
+    { stage: "Fetching video information...", duration: 2000, progressEnd: 15 },
+    { stage: "Downloading transcript...", duration: 3000, progressEnd: 35 },
+    { stage: "Processing video content...", duration: 2500, progressEnd: 55 },
+    { stage: "Analyzing content with AI...", duration: 4000, progressEnd: 80 },
+    { stage: "Generating flashcards...", duration: 2500, progressEnd: 95 },
+    { stage: "Finalizing...", duration: 1000, progressEnd: 100 },
+  ],
+};
 
 export default function CreateScreen() {
   const { method, skipSelection } = useLocalSearchParams<{
@@ -37,18 +66,20 @@ export default function CreateScreen() {
   const [showMethodSwitcher, setShowMethodSwitcher] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [simulatedProgress, setSimulatedProgress] = useState(0);
+  const [loadingStage, setLoadingStage] = useState<string>("");
   const [taskId, setTaskId] = useState<string | null>(null);
 
-  // Form states
   const [textInput, setTextInput] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [numPairs, setNumPairs] = useState("10");
   const [selectedFile, setSelectedFile] = useState<any>(null);
 
-  // Manual entry states
   const [manualCards, setManualCards] = useState<
     Array<{ question: string; answer: string }>
   >([{ question: "", answer: "" }]);
+
+  const progressIntervalRef = useRef<number | null>(null);
 
   const methods = [
     {
@@ -81,16 +112,22 @@ export default function CreateScreen() {
     },
   ];
 
-  // Set method on mount if passed from home screen
   useEffect(() => {
     if (method && skipSelection === "true") {
       setSelectedMethod(method as CreationMethod);
     }
   }, [method, skipSelection]);
 
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
+
   const currentMethodConfig = methods.find((m) => m.id === selectedMethod);
 
-  // Handle method selection from the method grid
   const handleMethodSelection = (methodId: CreationMethod) => {
     setSelectedMethod(methodId);
   };
@@ -110,13 +147,64 @@ export default function CreateScreen() {
     }
   };
 
+  const startProgressSimulation = (method: "pdf" | "text" | "youtube") => {
+    const stages = PROGRESS_STAGES[method];
+    let currentStageIndex = 0;
+    let stageStartTime = Date.now();
+    let stageStartProgress = 0;
+
+    const updateProgress = () => {
+      if (currentStageIndex >= stages.length) {
+        setSimulatedProgress(100);
+        setLoadingStage("Completing...");
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+        return;
+      }
+
+      const currentStage = stages[currentStageIndex];
+      const elapsed = Date.now() - stageStartTime;
+      const stageProgress = Math.min(elapsed / currentStage.duration, 1);
+
+      const progressRange = currentStage.progressEnd - stageStartProgress;
+      const newProgress = stageStartProgress + progressRange * stageProgress;
+
+      setSimulatedProgress(Math.min(newProgress, 95));
+      setLoadingStage(currentStage.stage);
+
+      if (
+        elapsed >= currentStage.duration &&
+        currentStageIndex < stages.length - 1
+      ) {
+        currentStageIndex++;
+        stageStartTime = Date.now();
+        stageStartProgress = currentStage.progressEnd;
+      }
+    };
+
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+
+    progressIntervalRef.current = setInterval(updateProgress, 100);
+    updateProgress();
+  };
+
   const handleSubmit = async () => {
     if (!selectedMethod) return;
 
     setLoading(true);
+    setProgress(0);
+    setSimulatedProgress(0);
+    setLoadingStage("Initializing...");
 
     try {
       let response;
+
+      if (selectedMethod !== "manual") {
+        startProgressSimulation(selectedMethod as "pdf" | "text" | "youtube");
+      }
 
       switch (selectedMethod) {
         case "pdf":
@@ -144,7 +232,6 @@ export default function CreateScreen() {
           response = await processYoutube();
           break;
         case "manual":
-          // For manual method, go directly to review-cards
           const validCards = manualCards.filter(
             (card) => card.question.trim() && card.answer.trim()
           );
@@ -175,6 +262,9 @@ export default function CreateScreen() {
       console.error("Submit error:", error);
       Alert.alert("Error", "Failed to process request");
       setLoading(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
     }
   };
 
@@ -271,13 +361,32 @@ export default function CreateScreen() {
       }
 
       const data = await response.json();
-      setProgress(data.progress || 0);
+
+      if (data.progress !== undefined && data.progress > simulatedProgress) {
+        setProgress(data.progress);
+        setSimulatedProgress(data.progress);
+      } else {
+        setProgress(simulatedProgress);
+      }
 
       if (data.status === "completed") {
-        setLoading(false);
-        router.push(`/review-cards?taskId=${id}&method=${selectedMethod}`);
+        setSimulatedProgress(100);
+        setProgress(100);
+        setLoadingStage("Complete!");
+
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+
+        setTimeout(() => {
+          setLoading(false);
+          router.push(`/review-cards?taskId=${id}&method=${selectedMethod}`);
+        }, 500);
       } else if (data.status === "failed") {
         setLoading(false);
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
         Alert.alert("Error", data.message || "Processing failed");
       } else {
         setTimeout(() => pollStatus(id), 1000);
@@ -285,11 +394,13 @@ export default function CreateScreen() {
     } catch (error) {
       console.error("Poll status error:", error);
       setLoading(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
       Alert.alert("Error", "Failed to check status");
     }
   };
 
-  // Method Switcher Component
   const renderMethodSwitcher = () => (
     <Modal visible={showMethodSwitcher} transparent animationType="fade">
       <View style={styles.methodSwitcherOverlay}>
@@ -373,7 +484,6 @@ export default function CreateScreen() {
       <View
         style={[styles.formSection, { backgroundColor: colors.background }]}
       >
-        {/* Form Header */}
         <LinearGradient
           colors={currentMethodConfig.gradient}
           style={styles.formHeader}
@@ -399,7 +509,6 @@ export default function CreateScreen() {
           </View>
         </LinearGradient>
 
-        {/* Form Content */}
         <View style={styles.formContent}>
           {selectedMethod === "pdf" && (
             <>
@@ -678,7 +787,6 @@ export default function CreateScreen() {
             </View>
           )}
 
-          {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, { backgroundColor: colors.tint }]}
             onPress={handleSubmit}
@@ -706,12 +814,10 @@ export default function CreateScreen() {
     );
   };
 
-  // Determine what to show - method selection or form
   const shouldShowMethodSelection = !selectedMethod;
 
   return (
     <ThemedView style={styles.container}>
-      {/* Header */}
       <LinearGradient
         colors={
           selectedMethod && currentMethodConfig
@@ -761,7 +867,6 @@ export default function CreateScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {shouldShowMethodSelection ? (
-          // Method Selection
           <View style={styles.methodSelection}>
             <View style={styles.selectionHeader}>
               <Text style={[styles.selectionTitle, { color: colors.text }]}>
@@ -805,7 +910,6 @@ export default function CreateScreen() {
                       </Text>
                     </View>
 
-                    {/* AI Badge for non-manual methods */}
                     {method.id !== "manual" && (
                       <View style={styles.aiBadge}>
                         <Text style={styles.aiBadgeText}>AI</Text>
@@ -817,15 +921,12 @@ export default function CreateScreen() {
             </View>
           </View>
         ) : (
-          // Form Display (main flow)
           renderForm()
         )}
       </ScrollView>
 
-      {/* Method Switcher Modal */}
       {renderMethodSwitcher()}
 
-      {/* Loading Modal */}
       <Modal visible={loading} transparent>
         <View style={styles.loadingOverlay}>
           <View
@@ -843,22 +944,38 @@ export default function CreateScreen() {
             <Text style={[styles.loadingTitle, { color: colors.text }]}>
               Generating Flashcards
             </Text>
-            <Text style={[styles.loadingText, { color: colors.text + "70" }]}>
-              AI is analyzing your content... {Math.round(progress * 100)}%
+            <Text style={[styles.loadingStage, { color: colors.text + "90" }]}>
+              {loadingStage}
             </Text>
-            <View
-              style={[
-                styles.progressBar,
-                { backgroundColor: colors.text + "20" },
-              ]}
-            >
+            <Text style={[styles.loadingText, { color: colors.text + "70" }]}>
+              {Math.round(simulatedProgress)}% complete
+            </Text>
+            <View style={styles.progressContainer}>
               <View
                 style={[
-                  styles.progressFill,
-                  { backgroundColor: colors.tint, width: `${progress * 100}%` },
+                  styles.progressBar,
+                  { backgroundColor: colors.text + "20" },
                 ]}
-              />
+              >
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.tint,
+                      width: `${simulatedProgress}%`,
+                    },
+                  ]}
+                />
+              </View>
             </View>
+
+            {simulatedProgress > 10 && simulatedProgress < 95 && (
+              <Text
+                style={[styles.estimatedTime, { color: colors.text + "50" }]}
+              >
+                This usually takes 30-60 seconds
+              </Text>
+            )}
           </View>
         </View>
       </Modal>
@@ -925,7 +1042,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Method Selection Styles
   methodSelection: {
     padding: 24,
   },
@@ -1007,7 +1123,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Method Switcher Modal Styles
   methodSwitcherOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -1075,7 +1190,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Form Section Styles
   formSection: {
     margin: 24,
     borderRadius: 20,
@@ -1121,7 +1235,6 @@ const styles = StyleSheet.create({
     gap: 24,
   },
 
-  // Input Styles
   inputGroup: {
     gap: 8,
   },
@@ -1160,7 +1273,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // File Picker Styles
   filePickerButton: {
     borderWidth: 2,
     borderStyle: "dashed",
@@ -1184,7 +1296,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Manual Cards Styles
   manualCardsContainer: {
     gap: 16,
   },
@@ -1247,7 +1358,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Submit Button
   submitButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1267,7 +1377,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Loading Modal Styles
   loadingOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -1306,14 +1415,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: "center",
   },
+  loadingStage: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 8,
+    fontWeight: "500",
+    minHeight: 20,
+  },
   loadingText: {
     fontSize: 14,
     textAlign: "center",
     marginBottom: 20,
     lineHeight: 20,
   },
+  progressContainer: {
+    width: 240,
+    alignItems: "center",
+    gap: 8,
+  },
   progressBar: {
-    width: 200,
+    width: "100%",
     height: 6,
     borderRadius: 3,
     overflow: "hidden",
@@ -1321,5 +1442,15 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 3,
+  },
+  progressPercentage: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  estimatedTime: {
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 8,
+    fontStyle: "italic",
   },
 });
