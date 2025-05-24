@@ -5,7 +5,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,13 +24,17 @@ const API_BASE_URL = "https://memori-ai.com";
 type CreationMethod = "pdf" | "text" | "youtube" | "manual" | null;
 
 export default function CreateScreen() {
-  const { method } = useLocalSearchParams<{ method?: string }>();
+  const { method, skipSelection } = useLocalSearchParams<{
+    method?: string;
+    skipSelection?: string;
+  }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
   const [selectedMethod, setSelectedMethod] = useState<CreationMethod>(
     (method as CreationMethod) || null
   );
+  const [showMethodSwitcher, setShowMethodSwitcher] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -76,6 +80,15 @@ export default function CreateScreen() {
       gradient: ["#43e97b", "#38f9d7"] as const,
     },
   ];
+
+  // Set method on mount if passed from home screen
+  useEffect(() => {
+    if (method && skipSelection === "true") {
+      setSelectedMethod(method as CreationMethod);
+    }
+  }, [method, skipSelection]);
+
+  const currentMethodConfig = methods.find((m) => m.id === selectedMethod);
 
   const pickDocument = async () => {
     try {
@@ -257,7 +270,6 @@ export default function CreateScreen() {
 
       if (data.status === "completed") {
         setLoading(false);
-        // Navigate to review-cards instead of direct success
         router.push(`/review-cards?taskId=${id}&method=${selectedMethod}`);
       } else if (data.status === "failed") {
         setLoading(false);
@@ -272,10 +284,85 @@ export default function CreateScreen() {
     }
   };
 
-  const renderForm = () => {
-    if (!selectedMethod) return null;
+  // Method Switcher Component
+  const renderMethodSwitcher = () => (
+    <Modal visible={showMethodSwitcher} transparent animationType="fade">
+      <View style={styles.methodSwitcherOverlay}>
+        <View
+          style={[
+            styles.methodSwitcherContent,
+            { backgroundColor: colors.background },
+          ]}
+        >
+          <View style={styles.methodSwitcherHeader}>
+            <Text style={[styles.methodSwitcherTitle, { color: colors.text }]}>
+              Choose Method
+            </Text>
+            <TouchableOpacity
+              style={styles.methodSwitcherClose}
+              onPress={() => setShowMethodSwitcher(false)}
+            >
+              <IconSymbol name="chevron.left" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
 
-    const selectedMethodConfig = methods.find((m) => m.id === selectedMethod);
+          <ScrollView style={styles.methodSwitcherScroll}>
+            {methods.map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.methodSwitcherOption,
+                  selectedMethod === method.id && {
+                    backgroundColor: colors.tint + "10",
+                    borderColor: colors.tint,
+                  },
+                ]}
+                onPress={() => {
+                  setSelectedMethod(method.id);
+                  setShowMethodSwitcher(false);
+                }}
+              >
+                <LinearGradient
+                  colors={method.gradient}
+                  style={styles.methodSwitcherIcon}
+                >
+                  <IconSymbol
+                    name={method.icon as any}
+                    size={20}
+                    color="white"
+                  />
+                </LinearGradient>
+                <View style={styles.methodSwitcherTextContent}>
+                  <Text
+                    style={[
+                      styles.methodSwitcherOptionTitle,
+                      { color: colors.text },
+                    ]}
+                  >
+                    {method.title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.methodSwitcherOptionDescription,
+                      { color: colors.text + "70" },
+                    ]}
+                  >
+                    {method.description}
+                  </Text>
+                </View>
+                {selectedMethod === method.id && (
+                  <IconSymbol name="checkmark" size={20} color={colors.tint} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderForm = () => {
+    if (!selectedMethod || !currentMethodConfig) return null;
 
     return (
       <View
@@ -283,7 +370,7 @@ export default function CreateScreen() {
       >
         {/* Form Header */}
         <LinearGradient
-          colors={selectedMethodConfig?.gradient || ["#667eea", "#764ba2"]}
+          colors={currentMethodConfig.gradient}
           style={styles.formHeader}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -291,17 +378,17 @@ export default function CreateScreen() {
           <View style={styles.formHeaderContent}>
             <View style={styles.formHeaderIcon}>
               <IconSymbol
-                name={selectedMethodConfig?.icon as any}
+                name={currentMethodConfig.icon as any}
                 size={24}
                 color="white"
               />
             </View>
             <View style={styles.formHeaderText}>
               <Text style={styles.formHeaderTitle}>
-                {selectedMethodConfig?.title}
+                {currentMethodConfig.title}
               </Text>
               <Text style={styles.formHeaderSubtitle}>
-                {selectedMethodConfig?.description}
+                {currentMethodConfig.description}
               </Text>
             </View>
           </View>
@@ -614,12 +701,17 @@ export default function CreateScreen() {
     );
   };
 
+  // Show method selection if no method was passed or skipSelection is false
+  const shouldShowMethodSelection = !selectedMethod || skipSelection !== "true";
+
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
       <LinearGradient
         colors={
-          colorScheme === "dark"
+          selectedMethod && currentMethodConfig
+            ? currentMethodConfig.gradient
+            : colorScheme === "dark"
             ? ["#1a1a2e", "#16213e"]
             : ["#667eea", "#764ba2"]
         }
@@ -634,10 +726,24 @@ export default function CreateScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerContent}>
-            <Text style={styles.title}>Create New Deck</Text>
-            <Text style={styles.subtitle}>
-              Transform any content into smart flashcards
+            <Text style={styles.title}>
+              {selectedMethod && currentMethodConfig
+                ? currentMethodConfig.title
+                : "Create New Deck"}
             </Text>
+            {selectedMethod && currentMethodConfig ? (
+              <TouchableOpacity
+                style={styles.changeMethodButton}
+                onPress={() => setShowMethodSwitcher(true)}
+              >
+                <IconSymbol name="chevron.right" size={12} color="white" />
+                <Text style={styles.changeMethodText}>Change Method</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.subtitle}>
+                Transform any content into smart flashcards
+              </Text>
+            )}
           </View>
 
           <View style={styles.headerSpacer} />
@@ -649,36 +755,10 @@ export default function CreateScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {!selectedMethod ? (
-          // Method Selection
+        {shouldShowMethodSelection ? (
+          // Method Selection (fallback for direct navigation)
           <View style={styles.methodSelection}>
             <View style={styles.selectionHeader}>
-              <View style={styles.selectionSteps}>
-                <View
-                  style={[
-                    styles.step,
-                    styles.activeStep,
-                    { backgroundColor: colors.tint },
-                  ]}
-                >
-                  <Text style={styles.stepText}>1</Text>
-                </View>
-                <View
-                  style={[
-                    styles.stepLine,
-                    { backgroundColor: colors.text + "20" },
-                  ]}
-                />
-                <View
-                  style={[styles.step, { backgroundColor: colors.text + "20" }]}
-                >
-                  <Text
-                    style={[styles.stepText, { color: colors.text + "40" }]}
-                  >
-                    2
-                  </Text>
-                </View>
-              </View>
               <Text style={[styles.selectionTitle, { color: colors.text }]}>
                 Choose Creation Method
               </Text>
@@ -692,227 +772,53 @@ export default function CreateScreen() {
               </Text>
             </View>
 
-            {/* AI Section Header */}
-            <View style={styles.aiSectionHeader}>
-              <View style={styles.aiHeaderContainer}>
-                <View
-                  style={[
-                    styles.aiHeaderIcon,
-                    {
-                      backgroundColor: colors.tint + "15",
-                      borderColor: colors.tint + "30",
-                    },
-                  ]}
-                >
-                  <IconSymbol name="plus" size={24} color={colors.tint} />
-                </View>
-                <Text style={[styles.aiTitle, { color: colors.text }]}>
-                  AI-Powered Generation
-                </Text>
-                <Text
-                  style={[styles.aiSubtitle, { color: colors.text + "70" }]}
-                >
-                  Let AI analyze your content and create perfect flashcards
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.aiConnectionLine,
-                  { backgroundColor: colors.tint + "30" },
-                ]}
-              />
-            </View>
-
             <View style={styles.methodsGrid}>
-              {/* AI-Powered Methods */}
-              <View style={styles.aiMethodsSection}>
-                {methods
-                  .filter((method) => method.id !== "manual")
-                  .map((method) => (
-                    <TouchableOpacity
-                      key={method.id}
-                      style={styles.methodCard}
-                      onPress={() => setSelectedMethod(method.id)}
-                      activeOpacity={0.8}
-                    >
-                      <LinearGradient
-                        colors={method.gradient}
-                        style={styles.methodGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      >
-                        <View style={styles.methodIcon}>
-                          <IconSymbol
-                            name={method.icon as any}
-                            size={20}
-                            color="white"
-                          />
-                        </View>
-                        <View style={styles.methodContent}>
-                          <Text style={styles.methodTitle}>{method.title}</Text>
-                          <Text style={styles.methodDescription}>
-                            {method.description}
-                          </Text>
-                        </View>
-
-                        {/* AI Sparkle Effect */}
-                        <View style={styles.aiSparkleContainer}>
-                          <View style={[styles.aiSparkle, styles.sparkle1]} />
-                          <View style={[styles.aiSparkle, styles.sparkle2]} />
-                          <View style={[styles.aiSparkle, styles.sparkle3]} />
-                        </View>
-
-                        {/* AI Badge */}
-                        <View style={styles.aiBadge}>
-                          <Text style={styles.aiBadgeText}>AI</Text>
-                        </View>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  ))}
-              </View>
-
-              {/* Separator */}
-              <View style={styles.methodsSeparator}>
-                <View
-                  style={[
-                    styles.separatorLine,
-                    { backgroundColor: colors.text + "20" },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.separatorTextContainer,
-                    { backgroundColor: colors.background },
-                  ]}
+              {methods.map((method) => (
+                <TouchableOpacity
+                  key={method.id}
+                  style={styles.methodCard}
+                  onPress={() => setSelectedMethod(method.id)}
+                  activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.separatorText,
-                      { color: colors.text + "60" },
-                    ]}
+                  <LinearGradient
+                    colors={method.gradient}
+                    style={styles.methodGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                   >
-                    or create manually
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.separatorLine,
-                    { backgroundColor: colors.text + "20" },
-                  ]}
-                />
-              </View>
+                    <View style={styles.methodIcon}>
+                      <IconSymbol
+                        name={method.icon as any}
+                        size={20}
+                        color="white"
+                      />
+                    </View>
+                    <View style={styles.methodContent}>
+                      <Text style={styles.methodTitle}>{method.title}</Text>
+                      <Text style={styles.methodDescription}>
+                        {method.description}
+                      </Text>
+                    </View>
 
-              {/* Manual Method */}
-              <View style={styles.manualMethodSection}>
-                {methods
-                  .filter((method) => method.id === "manual")
-                  .map((method) => (
-                    <TouchableOpacity
-                      key={method.id}
-                      style={styles.manualCard}
-                      onPress={() => setSelectedMethod(method.id)}
-                      activeOpacity={0.8}
-                    >
-                      <View
-                        style={[
-                          styles.manualContent,
-                          { backgroundColor: colors.background },
-                        ]}
-                      >
-                        {/* Paper lines effect */}
-                        <View style={styles.paperLinesContainer}>
-                          <View style={styles.paperLine} />
-                          <View style={styles.paperLine} />
-                          <View style={styles.paperLine} />
-                        </View>
-
-                        {/* Red margin line */}
-                        <View style={styles.marginLine} />
-
-                        <View style={styles.manualIconContainer}>
-                          <IconSymbol
-                            name={method.icon as any}
-                            size={20}
-                            color="#6B7280"
-                          />
-                        </View>
-                        <View style={styles.manualTextContent}>
-                          <Text
-                            style={[styles.manualTitle, { color: colors.text }]}
-                          >
-                            {method.title}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.manualDescription,
-                              { color: colors.text + "70" },
-                            ]}
-                          >
-                            {method.description}
-                          </Text>
-                        </View>
-
-                        {/* Manual Badge */}
-                        <View
-                          style={[
-                            styles.manualBadgeContainer,
-                            { backgroundColor: colors.text + "10" },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.manualBadgeTextNew,
-                              { color: colors.text + "60" },
-                            ]}
-                          >
-                            Manual
-                          </Text>
-                        </View>
+                    {/* AI Badge for non-manual methods */}
+                    {method.id !== "manual" && (
+                      <View style={styles.aiBadge}>
+                        <Text style={styles.aiBadgeText}>AI</Text>
                       </View>
-                    </TouchableOpacity>
-                  ))}
-              </View>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         ) : (
-          // Form Display
-          <View style={styles.formContainer}>
-            <View style={styles.formSteps}>
-              <View style={[styles.step, { backgroundColor: colors.tint }]}>
-                <Text style={styles.stepText}>1</Text>
-              </View>
-              <View
-                style={[
-                  styles.stepLine,
-                  styles.stepLineActive,
-                  { backgroundColor: colors.tint },
-                ]}
-              />
-              <View
-                style={[
-                  styles.step,
-                  styles.activeStep,
-                  { backgroundColor: colors.tint },
-                ]}
-              >
-                <Text style={styles.stepText}>2</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.changeMethodButton}
-              onPress={() => setSelectedMethod(null)}
-            >
-              <IconSymbol name="chevron.left" size={16} color={colors.tint} />
-              <Text style={[styles.changeMethodText, { color: colors.tint }]}>
-                Change Method
-              </Text>
-            </TouchableOpacity>
-
-            {renderForm()}
-          </View>
+          // Form Display (main flow)
+          renderForm()
         )}
       </ScrollView>
+
+      {/* Method Switcher Modal */}
+      {renderMethodSwitcher()}
 
       {/* Loading Modal */}
       <Modal visible={loading} transparent>
@@ -990,6 +896,20 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.8)",
     textAlign: "center",
   },
+  changeMethodButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  changeMethodText: {
+    fontSize: 12,
+    color: "white",
+    fontWeight: "500",
+  },
   headerSpacer: {
     width: 40,
   },
@@ -1000,49 +920,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Method Selection Styles
+  // Method Selection Styles (fallback)
   methodSelection: {
     padding: 24,
   },
   selectionHeader: {
     alignItems: "center",
     marginBottom: 32,
-  },
-  selectionSteps: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  step: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  activeStep: {
-    shadowColor: "#667eea",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  stepText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "white",
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    marginHorizontal: 8,
-  },
-  stepLineActive: {
-    shadowColor: "#667eea",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 1,
   },
   selectionTitle: {
     fontSize: 22,
@@ -1055,78 +939,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
-
-  // AI Section Header styles (matching home screen)
-  aiSectionHeader: {
-    marginBottom: 8,
-    paddingHorizontal: 0,
-  },
-  aiHeaderContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    backgroundColor: "transparent",
-  },
-  aiHeaderIcon: {
-    marginBottom: 12,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-  },
-  aiConnectionLine: {
-    width: 2,
-    height: 16,
-    alignSelf: "center",
-    marginVertical: 8,
-  },
-  aiTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  aiSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
-    maxWidth: 280,
-  },
-
-  methodsGrid: {},
-  aiMethodsSection: {
+  methodsGrid: {
     gap: 16,
-    marginBottom: 12,
   },
-  methodsSeparator: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 24,
-    paddingHorizontal: 20,
-  },
-  separatorLine: {
-    flex: 1,
-    height: 1,
-  },
-  separatorTextContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginHorizontal: 12,
-  },
-  separatorText: {
-    fontSize: 12,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  manualMethodSection: {
-    marginTop: 12,
-  },
-
-  // Method cards (matching home screen)
   methodCard: {
     borderRadius: 16,
     overflow: "hidden",
@@ -1154,11 +969,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
-    shadowColor: "rgba(255, 255, 255, 0.5)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
   methodContent: {
     flex: 1,
@@ -1168,47 +978,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "white",
     marginBottom: 4,
-    textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   methodDescription: {
     fontSize: 13,
     color: "rgba(255, 255, 255, 0.85)",
     lineHeight: 18,
-    textShadowColor: "rgba(0, 0, 0, 0.2)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  aiSparkleContainer: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    pointerEvents: "none",
-  },
-  aiSparkle: {
-    position: "absolute",
-    width: 4,
-    height: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.6)",
-    borderRadius: 2,
-  },
-  sparkle1: {
-    top: 15,
-    right: 20,
-    opacity: 0.8,
-  },
-  sparkle2: {
-    top: 35,
-    right: 45,
-    opacity: 0.6,
-  },
-  sparkle3: {
-    top: 25,
-    right: 70,
-    opacity: 0.7,
   },
   aiBadge: {
     position: "absolute",
@@ -1228,117 +1002,77 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Manual card styles (matching home screen)
-  manualCard: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "rgba(107, 114, 128, 0.2)",
+  // Method Switcher Modal Styles
+  methodSwitcherOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  manualContent: {
+  methodSwitcherContent: {
+    margin: 20,
+    borderRadius: 20,
+    maxHeight: "80%",
+    width: "90%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  methodSwitcherHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: 20,
-    position: "relative",
-    minHeight: 80,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.1)",
   },
-  paperLinesContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "space-around",
-    paddingVertical: 15,
+  methodSwitcherTitle: {
+    fontSize: 18,
+    fontWeight: "600",
   },
-  paperLine: {
-    height: 1,
-    backgroundColor: "rgba(107, 114, 128, 0.1)",
-    marginHorizontal: 20,
+  methodSwitcherClose: {
+    padding: 4,
   },
-  marginLine: {
-    position: "absolute",
-    left: 60,
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "rgba(239, 68, 68, 0.3)",
+  methodSwitcherScroll: {
+    maxHeight: 400,
   },
-  manualIconContainer: {
+  methodSwitcherOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "transparent",
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 4,
+  },
+  methodSwitcherIcon: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: "rgba(107, 114, 128, 0.1)",
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: "rgba(107, 114, 128, 0.2)",
+    marginRight: 12,
   },
-  manualTextContent: {
+  methodSwitcherTextContent: {
     flex: 1,
   },
-  manualTitle: {
+  methodSwitcherOptionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
-    fontFamily: "System",
+    marginBottom: 2,
   },
-  manualDescription: {
+  methodSwitcherOptionDescription: {
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: "System",
-  },
-  manualBadgeContainer: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(107, 114, 128, 0.2)",
-  },
-  manualBadgeTextNew: {
-    fontSize: 10,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // Form Container Styles
-  formContainer: {
-    padding: 24,
-  },
-  formSteps: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  changeMethodButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 24,
-  },
-  changeMethodText: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 4,
   },
 
   // Form Section Styles
   formSection: {
+    margin: 24,
     borderRadius: 20,
     overflow: "hidden",
     shadowColor: "#000",

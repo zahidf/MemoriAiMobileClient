@@ -215,7 +215,6 @@ export default function HomeScreen() {
       description: "Generate flashcards from documents",
       icon: "doc.fill",
       gradient: ["#667eea", "#764ba2"] as const,
-      route: "/(tabs)/create" as const,
     },
     {
       id: "text",
@@ -223,7 +222,6 @@ export default function HomeScreen() {
       description: "Create from your own content",
       icon: "text.alignleft",
       gradient: ["#f093fb", "#f5576c"] as const,
-      route: "/(tabs)/create" as const,
     },
     {
       id: "youtube",
@@ -231,7 +229,6 @@ export default function HomeScreen() {
       description: "Learn from video content",
       icon: "play.fill",
       gradient: ["#4facfe", "#00f2fe"] as const,
-      route: "/(tabs)/create" as const,
     },
     {
       id: "manual",
@@ -239,9 +236,19 @@ export default function HomeScreen() {
       description: "Custom question-answer pairs",
       icon: "pencil",
       gradient: ["#43e97b", "#38f9d7"] as const,
-      route: "/(tabs)/create" as const,
     },
   ];
+
+  // UPDATED: Direct navigation to create screen with method pre-selected
+  const handleMethodSelect = (methodId: string) => {
+    router.push({
+      pathname: "/(tabs)/create",
+      params: {
+        method: methodId,
+        skipSelection: "true", // Skip method selection step
+      },
+    });
+  };
 
   // Calculate stats for the header
   const totalCards = decks.reduce((sum, deck) => sum + deck.card_count, 0);
@@ -538,7 +545,7 @@ export default function HomeScreen() {
 
         {/* Create New Section with AI Theme */}
         <View style={styles.methodsContainer}>
-          {/* UPDATED AI Section Header */}
+          {/* AI Section Header */}
           <View style={styles.aiSectionHeader}>
             <View style={styles.aiHeaderContainer}>
               {/* AI Icon */}
@@ -589,12 +596,7 @@ export default function HomeScreen() {
                         opacity: 1,
                       },
                     ]}
-                    onPress={() =>
-                      router.push({
-                        pathname: method.route,
-                        params: { method: method.id },
-                      })
-                    }
+                    onPress={() => handleMethodSelect(method.id)} // UPDATED: Direct navigation
                     activeOpacity={0.8}
                   >
                     <LinearGradient
@@ -675,12 +677,7 @@ export default function HomeScreen() {
                         opacity: 1,
                       },
                     ]}
-                    onPress={() =>
-                      router.push({
-                        pathname: method.route,
-                        params: { method: method.id },
-                      })
-                    }
+                    onPress={() => handleMethodSelect(method.id)} // UPDATED: Direct navigation
                     activeOpacity={0.8}
                   >
                     <View
@@ -749,6 +746,7 @@ export default function HomeScreen() {
   );
 }
 
+// Styles remain exactly the same as the original file
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1028,16 +1026,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 32,
   },
-  // UPDATED AI Section Header styles
+  // AI Section Header styles
   aiSectionHeader: {
-    marginBottom: 8, // Reduced gap to connect better with methods
-    paddingHorizontal: 0, // Remove padding to align with methods
+    marginBottom: 8,
+    paddingHorizontal: 0,
   },
   aiHeaderContainer: {
     paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: "center",
-    backgroundColor: "transparent", // No background
+    backgroundColor: "transparent",
   },
   aiHeaderIcon: {
     marginBottom: 12,
@@ -1054,7 +1052,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginVertical: 8,
   },
-  // UPDATED Title and subtitle styles
   aiTitle: {
     fontSize: 22,
     fontWeight: "700",
@@ -1067,9 +1064,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     maxWidth: 280,
   },
-  methodsGrid: {
-    // Remove gap since we're now handling spacing within sections
-  },
+  methodsGrid: {},
   aiMethodsSection: {
     gap: 16,
     marginBottom: 12,
@@ -1197,14 +1192,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.5,
-  },
-  manualBadge: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  manualBadgeText: {
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "600",
   },
   // Manual Entry - Paper/Notebook Theme
   manualCard: {
