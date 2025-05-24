@@ -47,12 +47,27 @@ export default function StudyScreen() {
   const [cardsStudied, setCardsStudied] = useState(0);
   const [sessionStartTime] = useState(new Date());
 
-  // Simple animation values
+  // Animation and transition state
   const scaleAnimation = new Animated.Value(1);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [displayedCard, setDisplayedCard] = useState<LearningCard | null>(null);
 
   useEffect(() => {
     loadDueCards();
   }, [deckId]);
+
+  // Update displayed card when available cards change or current index changes
+  // BUT only when we're not showing an answer (to prevent answer flash)
+  useEffect(() => {
+    const availableCards = getAvailableCards();
+    if (
+      availableCards.length > 0 &&
+      currentCardIndex < availableCards.length &&
+      !showAnswer
+    ) {
+      setDisplayedCard(availableCards[currentCardIndex]);
+    }
+  }, [allCards, currentCardIndex, showAnswer]);
 
   // Get cards that are ready to be studied right now
   const getAvailableCards = (): LearningCard[] => {
@@ -97,14 +112,20 @@ export default function StudyScreen() {
   };
 
   const flipCard = () => {
-    if (showAnswer) return;
+    if (showAnswer || isTransitioning) return;
     setShowAnswer(true);
   };
 
   const handleQualityRating = async (quality: number) => {
     const availableCards = getAvailableCards();
 
-    if (!showAnswer || currentCardIndex >= availableCards.length) return;
+    if (
+      !showAnswer ||
+      currentCardIndex >= availableCards.length ||
+      isTransitioning ||
+      studying
+    )
+      return;
 
     const currentCard = availableCards[currentCardIndex];
 
@@ -114,6 +135,7 @@ export default function StudyScreen() {
     }
 
     setStudying(true);
+    setIsTransitioning(true);
 
     try {
       let newCard: LearningCard = { ...currentCard };
@@ -280,19 +302,20 @@ export default function StudyScreen() {
 
       setCardsStudied(cardsStudied + 1);
 
-      // Move to next available card
-      setTimeout(() => {
-        const nextAvailableCards = getAvailableCards();
-        if (nextAvailableCards.length === 0) {
-          setSessionComplete(true);
-        } else {
-          setCurrentCardIndex(0); // Always start from first available
-          setShowAnswer(false);
-        }
-      }, 200);
+      // Immediate transition - no delays
+      const nextAvailableCards = getAvailableCards();
+      if (nextAvailableCards.length === 0) {
+        setSessionComplete(true);
+      } else {
+        // Update both states together in the same batch
+        setShowAnswer(false);
+        setCurrentCardIndex(0);
+      }
+      setIsTransitioning(false);
     } catch (error) {
       console.error("Failed to update card:", error);
       Alert.alert("Error", "Failed to save your progress");
+      setIsTransitioning(false);
     } finally {
       setStudying(false);
     }
@@ -303,6 +326,8 @@ export default function StudyScreen() {
     setShowAnswer(false);
     setSessionComplete(false);
     setCardsStudied(0);
+    setIsTransitioning(false);
+    setDisplayedCard(null);
     loadDueCards();
   };
 
@@ -427,7 +452,22 @@ export default function StudyScreen() {
     );
   }
 
-  const currentCard = availableCards[currentCardIndex];
+  // Use displayedCard instead of currentCard to prevent content flashing
+  const currentCard =
+    displayedCard ||
+    (availableCards.length > 0 ? availableCards[currentCardIndex] : null);
+
+  if (!currentCard) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <ThemedText style={styles.loadingText}>Loading card...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
   const cardInfo = getCardTypeInfo(currentCard);
   const progress = ((currentCardIndex + 1) / availableCards.length) * 100;
 
@@ -525,8 +565,13 @@ export default function StudyScreen() {
 
         {!showAnswer ? (
           <TouchableOpacity
-            style={[styles.showAnswerButton, { backgroundColor: colors.tint }]}
+            style={[
+              styles.showAnswerButton,
+              { backgroundColor: colors.tint },
+              isTransitioning && styles.disabledButton,
+            ]}
             onPress={flipCard}
+            disabled={isTransitioning}
           >
             <Text style={styles.showAnswerText}>Show Answer</Text>
           </TouchableOpacity>
@@ -599,12 +644,12 @@ export default function StudyScreen() {
                   style={[
                     styles.ratingButton,
                     { backgroundColor: rating.color },
-                    studying && styles.disabledButton,
+                    (studying || isTransitioning) && styles.disabledButton,
                   ]}
                   onPress={() => handleQualityRating(rating.quality)}
-                  disabled={studying}
+                  disabled={studying || isTransitioning}
                 >
-                  {studying ? (
+                  {studying && !isTransitioning ? (
                     <ActivityIndicator color="white" size="small" />
                   ) : (
                     <>
