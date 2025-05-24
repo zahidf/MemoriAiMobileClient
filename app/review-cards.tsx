@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Modal,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,8 @@ import {
 import { getCurrentUser } from "../services/authService";
 import { addCardsToDeck, createDeck } from "../services/deckService";
 import type { QAPair } from "../types";
+
+const { height: screenHeight } = Dimensions.get("window");
 
 export default function ReviewCardsScreen() {
   const { taskId, method } = useLocalSearchParams<{
@@ -263,7 +266,11 @@ export default function ReviewCardsScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.cardContent}>
+        <ScrollView
+          style={styles.cardContentScrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.cardContentContainer}
+        >
           {/* Question Section */}
           <View style={styles.inputGroup}>
             <View style={styles.inputLabelContainer}>
@@ -279,21 +286,33 @@ export default function ReviewCardsScreen() {
                 Question
               </Text>
             </View>
-            <TextInput
+            <ScrollView
               style={[
-                styles.questionInput,
+                styles.questionInputScrollView,
                 {
                   backgroundColor: colors.background,
                   borderColor: colors.text + "20",
-                  color: colors.text,
                 },
               ]}
-              placeholder="Enter your question..."
-              placeholderTextColor={colors.text + "50"}
-              value={pair.question}
-              onChangeText={(text) => updateQAPair(index, "question", text)}
-              multiline
-            />
+              showsVerticalScrollIndicator={true}
+              persistentScrollbar={true}
+            >
+              <TextInput
+                style={[
+                  styles.questionInput,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                  },
+                ]}
+                placeholder="Enter your question..."
+                placeholderTextColor={colors.text + "50"}
+                value={pair.question}
+                onChangeText={(text) => updateQAPair(index, "question", text)}
+                multiline
+                scrollEnabled={false} // Disable TextInput scroll since we're using ScrollView
+              />
+            </ScrollView>
           </View>
 
           {/* Answer Section */}
@@ -311,23 +330,35 @@ export default function ReviewCardsScreen() {
                 Answer
               </Text>
             </View>
-            <TextInput
+            <ScrollView
               style={[
-                styles.answerInput,
+                styles.answerInputScrollView,
                 {
                   backgroundColor: colors.background,
                   borderColor: colors.text + "20",
-                  color: colors.text,
                 },
               ]}
-              placeholder="Enter the answer..."
-              placeholderTextColor={colors.text + "50"}
-              value={pair.answer}
-              onChangeText={(text) => updateQAPair(index, "answer", text)}
-              multiline
-            />
+              showsVerticalScrollIndicator={true}
+              persistentScrollbar={true}
+            >
+              <TextInput
+                style={[
+                  styles.answerInput,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                  },
+                ]}
+                placeholder="Enter the answer..."
+                placeholderTextColor={colors.text + "50"}
+                value={pair.answer}
+                onChangeText={(text) => updateQAPair(index, "answer", text)}
+                multiline
+                scrollEnabled={false} // Disable TextInput scroll since we're using ScrollView
+              />
+            </ScrollView>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Card count indicator on the side */}
         <View style={styles.cardCountIndicator}>
@@ -801,18 +832,18 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Card Styles with Stack Effect
+  // Card Styles with Stack Effect - UPDATED FOR DYNAMIC HEIGHT
   cardContainer: {
     paddingHorizontal: 24,
     marginBottom: 32,
     position: "relative",
-    height: 420,
+    minHeight: 480, // Increased minimum height
   },
   cardLayer: {
     position: "absolute",
     left: 24,
     right: 24,
-    height: 400,
+    minHeight: 460, // Dynamic height based on content
     borderRadius: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -839,7 +870,7 @@ const styles = StyleSheet.create({
   mainCard: {
     borderRadius: 20,
     padding: 24,
-    height: 400,
+    minHeight: 460, // Increased minimum height
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -850,6 +881,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(102, 126, 234, 0.2)",
     zIndex: 3,
+    flex: 1, // Allow card to expand
   },
   cardCornerFold: {
     position: "absolute",
@@ -864,7 +896,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
   cardHeaderLeft: {
     flexDirection: "row",
@@ -892,20 +924,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "rgba(255, 71, 87, 0.1)",
   },
-  cardContent: {
-    flex: 1,
-    gap: 20,
-  },
 
-  // Input Styles
+  // NEW: Scrollable card content
+  cardContentScrollView: {
+    flex: 1,
+    maxHeight: screenHeight * 0.4, // Limit to 40% of screen height
+  },
+  cardContentContainer: {},
+
+  // Input Styles - UPDATED FOR BETTER SCROLLING
   inputGroup: {
-    gap: 8,
+    marginBottom: 24,
   },
   inputLabelContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   inputLabelIcon: {
     width: 24,
@@ -923,23 +958,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  questionInput: {
+
+  // NEW: ScrollView containers for text inputs
+  questionInputScrollView: {
     borderWidth: 1.5,
     borderRadius: 12,
+    maxHeight: 120, // Limit height and add scrolling
+  },
+  answerInputScrollView: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    maxHeight: 140, // Limit height and add scrolling
+  },
+
+  // UPDATED: Text inputs without fixed heights
+  questionInput: {
     padding: 16,
     fontSize: 16,
-    minHeight: 80,
-    textAlignVertical: "top",
     lineHeight: 22,
+    minHeight: 80, // Minimum height but can expand
   },
   answerInput: {
-    borderWidth: 1.5,
-    borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: "top",
     lineHeight: 22,
+    minHeight: 100, // Minimum height but can expand
   },
 
   // Card Count Indicator
