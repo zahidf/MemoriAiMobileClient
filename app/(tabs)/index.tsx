@@ -360,117 +360,175 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.decksGrid}>
-              {decks.map((deck) => {
+              {decks.map((deck, deckIndex) => {
                 const status = getDeckStatus(deck);
 
                 return (
                   <TouchableOpacity
                     key={deck.id}
-                    style={[
-                      styles.deckCard,
-                      { backgroundColor: colors.background },
-                    ]}
+                    style={styles.deckCardContainer}
                     onPress={() => handleStudyDeck(deck)}
                     activeOpacity={0.8}
                   >
-                    {/* Deck Header */}
-                    <View style={styles.deckHeader}>
+                    {/* Pile of Cards Effect - Background Layers */}
+                    <View
+                      style={[
+                        styles.cardLayer,
+                        styles.cardLayer3,
+                        { backgroundColor: colors.background },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.cardLayer,
+                        styles.cardLayer2,
+                        { backgroundColor: colors.background },
+                      ]}
+                    />
+
+                    {/* Main Card (Top Layer) */}
+                    <View
+                      style={[
+                        styles.deckCard,
+                        { backgroundColor: colors.background },
+                      ]}
+                    >
+                      {/* Card corner fold effect */}
                       <View
                         style={[
-                          styles.deckIconContainer,
-                          { backgroundColor: status.color + "20" },
+                          styles.cardCornerFold,
+                          { backgroundColor: colors.text + "10" },
                         ]}
-                      >
-                        <IconSymbol
-                          name={status.icon}
-                          size={20}
-                          color={status.color}
-                        />
-                      </View>
+                      />
 
-                      <TouchableOpacity
-                        style={styles.deckMenuButton}
-                        onPress={() => {
-                          Alert.alert(deck.title, "Choose an action", [
-                            { text: "Cancel", style: "cancel" },
-                            ...(__DEV__ && deck.card_count > 0
-                              ? [
-                                  {
-                                    text: "Reset for Study",
-                                    onPress: () =>
-                                      handleResetDeckForStudy(deck),
-                                  },
-                                ]
-                              : []),
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: () => handleDeleteDeck(deck),
-                            },
-                          ]);
-                        }}
-                      >
-                        <IconSymbol
-                          name="chevron.right"
-                          size={16}
-                          color={colors.text + "60"}
-                        />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Deck Content */}
-                    <View style={styles.deckContent}>
-                      <ThemedText
-                        type="defaultSemiBold"
-                        style={styles.deckTitle}
-                        numberOfLines={2}
-                      >
-                        {deck.title}
-                      </ThemedText>
-
-                      <View style={styles.deckStats}>
-                        <ThemedText
-                          style={[
-                            styles.deckStat,
-                            { color: colors.text + "70" },
-                          ]}
-                        >
-                          {deck.card_count} cards
-                        </ThemedText>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: status.color + "15" },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.statusText, { color: status.color }]}
-                        >
-                          {status.text}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Study Button Overlay */}
-                    {status.canStudy && (
-                      <View style={styles.studyOverlay}>
+                      {/* Deck Header */}
+                      <View style={styles.deckHeader}>
                         <View
                           style={[
-                            styles.studyBadge,
-                            { backgroundColor: status.color },
+                            styles.deckIconContainer,
+                            { backgroundColor: status.color + "20" },
                           ]}
                         >
                           <IconSymbol
-                            name="flame.fill"
-                            size={14}
-                            color="white"
+                            name={status.icon}
+                            size={20}
+                            color={status.color}
                           />
-                          <Text style={styles.studyBadgeText}>Ready</Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.deckMenuButton}
+                          onPress={() => {
+                            Alert.alert(deck.title, "Choose an action", [
+                              { text: "Cancel", style: "cancel" },
+                              ...(__DEV__ && deck.card_count > 0
+                                ? [
+                                    {
+                                      text: "Reset for Study",
+                                      onPress: () =>
+                                        handleResetDeckForStudy(deck),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                text: "Delete",
+                                style: "destructive",
+                                onPress: () => handleDeleteDeck(deck),
+                              },
+                            ]);
+                          }}
+                        >
+                          <IconSymbol
+                            name="chevron.right"
+                            size={16}
+                            color={colors.text + "60"}
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Deck Content */}
+                      <View style={styles.deckContent}>
+                        <ThemedText
+                          type="defaultSemiBold"
+                          style={styles.deckTitle}
+                          numberOfLines={2}
+                        >
+                          {deck.title}
+                        </ThemedText>
+
+                        <View style={styles.deckStats}>
+                          <ThemedText
+                            style={[
+                              styles.deckStat,
+                              { color: colors.text + "70" },
+                            ]}
+                          >
+                            {deck.card_count} cards
+                          </ThemedText>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: status.color + "15" },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.statusText, { color: status.color }]}
+                          >
+                            {status.text}
+                          </Text>
                         </View>
                       </View>
-                    )}
+
+                      {/* Card count indicator on the side */}
+                      <View style={styles.cardCountIndicator}>
+                        {Array.from(
+                          { length: Math.min(deck.card_count, 5) },
+                          (_, i) => (
+                            <View
+                              key={i}
+                              style={[
+                                styles.cardCountLine,
+                                { backgroundColor: colors.text + "20" },
+                                i === 4 &&
+                                  deck.card_count > 5 &&
+                                  styles.cardCountLineThicker,
+                              ]}
+                            />
+                          )
+                        )}
+                        {deck.card_count > 5 && (
+                          <Text
+                            style={[
+                              styles.cardCountText,
+                              { color: colors.text + "60" },
+                            ]}
+                          >
+                            +{deck.card_count - 5}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Study Button Overlay */}
+                      {status.canStudy && (
+                        <View style={styles.studyOverlay}>
+                          <View
+                            style={[
+                              styles.studyBadge,
+                              { backgroundColor: status.color },
+                            ]}
+                          >
+                            <IconSymbol
+                              name="flame.fill"
+                              size={14}
+                              color="white"
+                            />
+                            <Text style={styles.studyBadgeText}>Ready</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -480,31 +538,40 @@ export default function HomeScreen() {
 
         {/* Create New Section with AI Theme */}
         <View style={styles.methodsContainer}>
+          {/* UPDATED AI Section Header */}
           <View style={styles.aiSectionHeader}>
-            <LinearGradient
-              colors={["#667eea", "#764ba2", "#f093fb"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.aiHeaderGradient}
-            >
-              <View style={styles.aiIconContainer}>
-                <View style={styles.aiOrb}>
-                  <View style={styles.aiCore} />
-                  <View style={[styles.aiRing, styles.aiRing1]} />
-                  <View style={[styles.aiRing, styles.aiRing2]} />
-                </View>
+            <View style={styles.aiHeaderContainer}>
+              {/* AI Icon */}
+              <View
+                style={[
+                  styles.aiHeaderIcon,
+                  {
+                    backgroundColor: colors.tint + "15",
+                    borderColor: colors.tint + "30",
+                  },
+                ]}
+              >
+                <IconSymbol name="plus" size={24} color={colors.tint} />
               </View>
-              <View style={styles.aiHeaderContent}>
-                <Text style={styles.aiTitle}>
-                  {decks.length > 0
-                    ? "Create New Deck with AI"
-                    : "Get Started - AI-Powered Learning"}
-                </Text>
-                <Text style={styles.aiSubtitle}>
-                  Transform any content into smart flashcards instantly
-                </Text>
-              </View>
-            </LinearGradient>
+
+              {/* Header Content */}
+              <Text style={[styles.aiTitle, { color: colors.text }]}>
+                {decks.length > 0
+                  ? "Create New Deck with AI"
+                  : "Get Started - AI-Powered Learning"}
+              </Text>
+              <Text style={[styles.aiSubtitle, { color: colors.text + "70" }]}>
+                Transform any content into smart flashcards instantly
+              </Text>
+            </View>
+
+            {/* Connection line */}
+            <View
+              style={[
+                styles.aiConnectionLine,
+                { backgroundColor: colors.tint + "30" },
+              ]}
+            />
           </View>
 
           <View style={styles.methodsGrid}>
@@ -786,77 +853,174 @@ const styles = StyleSheet.create({
   decksGrid: {
     gap: 24,
   },
+  // Updated deck card styles for pile of cards effect
+  deckCardContainer: {
+    marginBottom: 32,
+    marginHorizontal: 8,
+    position: "relative",
+    height: 180, // Increased to accommodate more visible layers
+  },
+
+  // Background card layers for pile effect
+  cardLayer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 160,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+    borderWidth: 2,
+    borderColor: "rgba(102, 126, 234, 0.25)",
+  },
+
+  cardLayer2: {
+    top: 6,
+    left: 4,
+    right: -4,
+    transform: [{ rotate: "2.5deg" }],
+    opacity: 0.85,
+    borderColor: "rgba(102, 126, 234, 0.35)",
+  },
+
+  cardLayer3: {
+    top: 12,
+    left: 8,
+    right: -8,
+    transform: [{ rotate: "-1.8deg" }],
+    opacity: 0.65,
+    borderColor: "rgba(102, 126, 234, 0.45)",
+  },
+
+  // Main deck card (top layer)
   deckCard: {
-    borderRadius: 20,
-    padding: 24,
-    marginHorizontal: 4,
+    borderRadius: 16,
+    padding: 20,
+    height: 160,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.25,
     shadowRadius: 20,
-    elevation: 8,
+    elevation: 12,
     position: "relative",
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "rgba(102, 126, 234, 0.15)",
+    borderColor: "rgba(102, 126, 234, 0.3)",
+    justifyContent: "space-between",
+    zIndex: 3, // Ensure top layer is above others
   },
+
+  // Corner fold effect to make it look more like a card
+  cardCornerFold: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    transform: [{ rotate: "45deg" }],
+    borderTopRightRadius: 16,
+  },
+
   deckHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 12,
   },
+
   deckIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
   },
+
   deckMenuButton: {
-    padding: 8,
+    padding: 6,
   },
+
   deckContent: {
-    gap: 8,
+    flex: 1,
+    justifyContent: "space-between",
   },
+
   deckTitle: {
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 20,
+    marginBottom: 8,
   },
+
   deckStats: {
     marginBottom: 8,
   },
+
   deckStat: {
-    fontSize: 14,
+    fontSize: 13,
   },
+
   statusBadge: {
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
+
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+
+  // Card count indicator on the right side
+  cardCountIndicator: {
+    position: "absolute",
+    right: 8,
+    top: "50%",
+    transform: [{ translateY: -20 }],
+    alignItems: "center",
+  },
+
+  cardCountLine: {
+    width: 3,
+    height: 8,
+    marginVertical: 1,
+    borderRadius: 1.5,
+  },
+
+  cardCountLineThicker: {
+    width: 4,
+    height: 10,
+  },
+
+  cardCountText: {
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
   studyOverlay: {
     position: "absolute",
-    top: 16,
-    right: 16,
+    top: 12,
+    right: 12,
   },
+
   studyBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 3,
   },
+
   studyBadgeText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     textTransform: "uppercase",
   },
@@ -864,83 +1028,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 32,
   },
+  // UPDATED AI Section Header styles
   aiSectionHeader: {
-    marginBottom: 24,
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: "#667eea",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    marginBottom: 8, // Reduced gap to connect better with methods
+    paddingHorizontal: 0, // Remove padding to align with methods
   },
-  aiHeaderGradient: {
-    flexDirection: "row",
+  aiHeaderContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     alignItems: "center",
-    padding: 24,
-    position: "relative",
-    overflow: "hidden",
+    backgroundColor: "transparent", // No background
   },
-  aiIconContainer: {
-    marginRight: 20,
-    position: "relative",
-  },
-  aiOrb: {
-    width: 60,
-    height: 60,
+  aiHeaderIcon: {
+    marginBottom: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    position: "relative",
-  },
-  aiCore: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "white",
-    shadowColor: "white",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  aiRing: {
-    position: "absolute",
-    borderRadius: 30,
     borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.4)",
   },
-  aiRing1: {
-    width: 40,
-    height: 40,
-    top: 10,
-    left: 10,
+  aiConnectionLine: {
+    width: 2,
+    height: 16,
+    alignSelf: "center",
+    marginVertical: 8,
   },
-  aiRing2: {
-    width: 56,
-    height: 56,
-    top: 2,
-    left: 2,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  aiHeaderContent: {
-    flex: 1,
-  },
+  // UPDATED Title and subtitle styles
   aiTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
-    color: "white",
-    marginBottom: 6,
-    textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    marginBottom: 8,
+    textAlign: "center",
   },
   aiSubtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    lineHeight: 20,
-    textShadowColor: "rgba(0, 0, 0, 0.2)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    maxWidth: 280,
   },
   methodsGrid: {
     // Remove gap since we're now handling spacing within sections
