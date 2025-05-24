@@ -1,4 +1,3 @@
-import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { Colors } from "@/constants/Colors";
@@ -276,283 +275,463 @@ export default function CreateScreen() {
   const renderForm = () => {
     if (!selectedMethod) return null;
 
+    const selectedMethodConfig = methods.find((m) => m.id === selectedMethod);
+
     return (
-      <View style={[styles.formCard, { backgroundColor: colors.background }]}>
-        {selectedMethod === "pdf" && (
-          <>
-            <TouchableOpacity
-              style={[styles.filePickerButton, { borderColor: colors.tint }]}
-              onPress={pickDocument}
-            >
-              <IconSymbol name="doc.fill" size={24} color={colors.tint} />
-              <ThemedText
-                style={[styles.filePickerText, { color: colors.tint }]}
+      <View
+        style={[styles.formSection, { backgroundColor: colors.background }]}
+      >
+        {/* Form Header */}
+        <LinearGradient
+          colors={selectedMethodConfig?.gradient || ["#667eea", "#764ba2"]}
+          style={styles.formHeader}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.formHeaderContent}>
+            <View style={styles.formHeaderIcon}>
+              <IconSymbol
+                name={selectedMethodConfig?.icon as any}
+                size={24}
+                color="white"
+              />
+            </View>
+            <View style={styles.formHeaderText}>
+              <Text style={styles.formHeaderTitle}>
+                {selectedMethodConfig?.title}
+              </Text>
+              <Text style={styles.formHeaderSubtitle}>
+                {selectedMethodConfig?.description}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Form Content */}
+        <View style={styles.formContent}>
+          {selectedMethod === "pdf" && (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.filePickerButton,
+                  {
+                    borderColor: selectedFile
+                      ? colors.tint
+                      : colors.text + "30",
+                    backgroundColor: selectedFile
+                      ? colors.tint + "10"
+                      : "transparent",
+                  },
+                ]}
+                onPress={pickDocument}
               >
-                {selectedFile ? selectedFile.name : "Select PDF File"}
-              </ThemedText>
-            </TouchableOpacity>
-
-            <View style={styles.inputContainer}>
-              <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-                Number of Cards
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.text + "30",
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="10"
-                value={numPairs}
-                onChangeText={setNumPairs}
-                keyboardType="numeric"
-              />
-            </View>
-          </>
-        )}
-
-        {selectedMethod === "text" && (
-          <>
-            <View style={styles.inputContainer}>
-              <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-                Enter Your Text
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.text + "30",
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="Paste your text here..."
-                placeholderTextColor={colors.text + "60"}
-                value={textInput}
-                onChangeText={setTextInput}
-                multiline
-                numberOfLines={6}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-                Number of Cards
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.text + "30",
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="10"
-                value={numPairs}
-                onChangeText={setNumPairs}
-                keyboardType="numeric"
-              />
-            </View>
-          </>
-        )}
-
-        {selectedMethod === "youtube" && (
-          <>
-            <View style={styles.inputContainer}>
-              <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-                YouTube Video URL
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.urlInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.text + "30",
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="https://www.youtube.com/watch?v=..."
-                placeholderTextColor={colors.text + "60"}
-                value={youtubeUrl}
-                onChangeText={setYoutubeUrl}
-                keyboardType="url"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-                Number of Cards
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.text + "30",
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="10"
-                value={numPairs}
-                onChangeText={setNumPairs}
-                keyboardType="numeric"
-              />
-            </View>
-          </>
-        )}
-
-        {selectedMethod === "manual" && (
-          <View style={styles.inputContainer}>
-            <ThemedText type="defaultSemiBold" style={styles.inputLabel}>
-              Create Your Flashcards
-            </ThemedText>
-            {manualCards.map((card, index) => (
-              <View key={index} style={styles.manualCardContainer}>
-                <View style={styles.cardHeader}>
-                  <ThemedText style={styles.cardNumber}>
-                    Card #{index + 1}
-                  </ThemedText>
-                  {manualCards.length > 1 && (
-                    <TouchableOpacity onPress={() => removeManualCard(index)}>
-                      <IconSymbol name="trash" size={16} color="#ff4757" />
-                    </TouchableOpacity>
-                  )}
+                <View style={styles.filePickerContent}>
+                  <IconSymbol
+                    name="doc.fill"
+                    size={24}
+                    color={selectedFile ? colors.tint : colors.text + "60"}
+                  />
+                  <View style={styles.filePickerTextContainer}>
+                    <Text
+                      style={[
+                        styles.filePickerText,
+                        {
+                          color: selectedFile
+                            ? colors.tint
+                            : colors.text + "60",
+                        },
+                      ]}
+                    >
+                      {selectedFile ? selectedFile.name : "Choose PDF File"}
+                    </Text>
+                    {selectedFile && (
+                      <Text
+                        style={[
+                          styles.filePickerHint,
+                          { color: colors.text + "50" },
+                        ]}
+                      >
+                        Tap to change file
+                      </Text>
+                    )}
+                  </View>
+                  <IconSymbol
+                    name="chevron.right"
+                    size={16}
+                    color={colors.text + "40"}
+                  />
                 </View>
+              </TouchableOpacity>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Number of Cards
+                </Text>
                 <TextInput
                   style={[
-                    styles.questionInput,
+                    styles.numberInput,
                     {
                       backgroundColor: colors.background,
-                      borderColor: colors.text + "30",
+                      borderColor: colors.text + "20",
                       color: colors.text,
                     },
                   ]}
-                  placeholder="Enter question..."
-                  placeholderTextColor={colors.text + "60"}
-                  value={card.question}
-                  onChangeText={(text) =>
-                    updateManualCard(index, "question", text)
-                  }
-                  multiline
-                />
-                <TextInput
-                  style={[
-                    styles.answerInput,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.text + "30",
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder="Enter answer..."
-                  placeholderTextColor={colors.text + "60"}
-                  value={card.answer}
-                  onChangeText={(text) =>
-                    updateManualCard(index, "answer", text)
-                  }
-                  multiline
+                  placeholder="10"
+                  placeholderTextColor={colors.text + "40"}
+                  value={numPairs}
+                  onChangeText={setNumPairs}
+                  keyboardType="numeric"
                 />
               </View>
-            ))}
-            <TouchableOpacity
-              style={[styles.addCardButton, { borderColor: colors.tint }]}
-              onPress={addManualCard}
-            >
-              <IconSymbol name="plus" size={20} color={colors.tint} />
-              <ThemedText style={[styles.addCardText, { color: colors.tint }]}>
-                Add Another Card
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: colors.tint }]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.submitButtonText}>
-              {selectedMethod === "manual"
-                ? "Review Cards"
-                : "Generate Flashcards"}
-            </Text>
+            </>
           )}
-        </TouchableOpacity>
+
+          {selectedMethod === "text" && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Your Content
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.text + "20",
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="Paste your text content here..."
+                  placeholderTextColor={colors.text + "40"}
+                  value={textInput}
+                  onChangeText={setTextInput}
+                  multiline
+                  numberOfLines={8}
+                />
+                <Text style={[styles.inputHint, { color: colors.text + "50" }]}>
+                  Copy and paste any text content - articles, notes, study
+                  materials
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Number of Cards
+                </Text>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.text + "20",
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="10"
+                  placeholderTextColor={colors.text + "40"}
+                  value={numPairs}
+                  onChangeText={setNumPairs}
+                  keyboardType="numeric"
+                />
+              </View>
+            </>
+          )}
+
+          {selectedMethod === "youtube" && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  YouTube Video URL
+                </Text>
+                <TextInput
+                  style={[
+                    styles.urlInput,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.text + "20",
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  placeholderTextColor={colors.text + "40"}
+                  value={youtubeUrl}
+                  onChangeText={setYoutubeUrl}
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={[styles.inputHint, { color: colors.text + "50" }]}>
+                  Enter any YouTube video URL to generate cards from its content
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Number of Cards
+                </Text>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.text + "20",
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="10"
+                  placeholderTextColor={colors.text + "40"}
+                  value={numPairs}
+                  onChangeText={setNumPairs}
+                  keyboardType="numeric"
+                />
+              </View>
+            </>
+          )}
+
+          {selectedMethod === "manual" && (
+            <View style={styles.manualCardsContainer}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                Create Your Flashcards
+              </Text>
+              <Text
+                style={[
+                  styles.inputHint,
+                  { color: colors.text + "60", marginBottom: 20 },
+                ]}
+              >
+                Add question and answer pairs manually
+              </Text>
+
+              {manualCards.map((card, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.manualCardItem,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <View style={styles.manualCardHeader}>
+                    <View
+                      style={[
+                        styles.cardBadge,
+                        { backgroundColor: colors.tint + "15" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.cardBadgeText, { color: colors.tint }]}
+                      >
+                        Card {index + 1}
+                      </Text>
+                    </View>
+                    {manualCards.length > 1 && (
+                      <TouchableOpacity
+                        onPress={() => removeManualCard(index)}
+                        style={styles.removeCardButton}
+                      >
+                        <IconSymbol name="trash" size={16} color="#ff4757" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <TextInput
+                    style={[
+                      styles.questionInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.text + "20",
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Enter your question..."
+                    placeholderTextColor={colors.text + "40"}
+                    value={card.question}
+                    onChangeText={(text) =>
+                      updateManualCard(index, "question", text)
+                    }
+                    multiline
+                  />
+
+                  <TextInput
+                    style={[
+                      styles.answerInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.text + "20",
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Enter the answer..."
+                    placeholderTextColor={colors.text + "40"}
+                    value={card.answer}
+                    onChangeText={(text) =>
+                      updateManualCard(index, "answer", text)
+                    }
+                    multiline
+                  />
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={[
+                  styles.addCardButton,
+                  { borderColor: colors.tint + "40" },
+                ]}
+                onPress={addManualCard}
+              >
+                <IconSymbol name="plus" size={20} color={colors.tint} />
+                <Text style={[styles.addCardText, { color: colors.tint }]}>
+                  Add Another Card
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, { backgroundColor: colors.tint }]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <>
+                <IconSymbol
+                  name={selectedMethod === "manual" ? "checkmark" : "plus"}
+                  size={20}
+                  color="white"
+                />
+                <Text style={styles.submitButtonText}>
+                  {selectedMethod === "manual"
+                    ? "Review Cards"
+                    : "Generate Flashcards"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
   return (
     <ThemedView style={styles.container}>
+      {/* Header */}
+      <LinearGradient
+        colors={
+          colorScheme === "dark"
+            ? ["#1a1a2e", "#16213e"]
+            : ["#667eea", "#764ba2"]
+        }
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <IconSymbol name="chevron.left" size={24} color="white" />
+          </TouchableOpacity>
+
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Create New Deck</Text>
+            <Text style={styles.subtitle}>
+              Transform any content into smart flashcards
+            </Text>
+          </View>
+
+          <View style={styles.headerSpacer} />
+        </View>
+      </LinearGradient>
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.header}>
-          <ThemedText type="title" style={styles.title}>
-            Create Deck
-          </ThemedText>
-          <ThemedText style={[styles.subtitle, { color: colors.text + "80" }]}>
-            Choose how you want to create your flashcards
-          </ThemedText>
-        </View>
-
-        {/* AI Section Header - Matching Home Screen */}
-        <View style={styles.methodsContainer}>
-          <View style={styles.aiSectionHeader}>
-            <View style={styles.aiHeaderContainer}>
-              {/* AI Icon */}
-              <View
+        {!selectedMethod ? (
+          // Method Selection
+          <View style={styles.methodSelection}>
+            <View style={styles.selectionHeader}>
+              <View style={styles.selectionSteps}>
+                <View
+                  style={[
+                    styles.step,
+                    styles.activeStep,
+                    { backgroundColor: colors.tint },
+                  ]}
+                >
+                  <Text style={styles.stepText}>1</Text>
+                </View>
+                <View
+                  style={[
+                    styles.stepLine,
+                    { backgroundColor: colors.text + "20" },
+                  ]}
+                />
+                <View
+                  style={[styles.step, { backgroundColor: colors.text + "20" }]}
+                >
+                  <Text
+                    style={[styles.stepText, { color: colors.text + "40" }]}
+                  >
+                    2
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.selectionTitle, { color: colors.text }]}>
+                Choose Creation Method
+              </Text>
+              <Text
                 style={[
-                  styles.aiHeaderIcon,
-                  {
-                    backgroundColor: colors.tint + "15",
-                    borderColor: colors.tint + "30",
-                  },
+                  styles.selectionSubtitle,
+                  { color: colors.text + "70" },
                 ]}
               >
-                <IconSymbol name="plus" size={24} color={colors.tint} />
-              </View>
-
-              {/* Header Content */}
-              <Text style={[styles.aiTitle, { color: colors.text }]}>
-                Create New Deck with AI
-              </Text>
-              <Text style={[styles.aiSubtitle, { color: colors.text + "70" }]}>
-                Transform any content into smart flashcards instantly
+                Select how you'd like to create your flashcards
               </Text>
             </View>
 
-            {/* Connection line */}
-            <View
-              style={[
-                styles.aiConnectionLine,
-                { backgroundColor: colors.tint + "30" },
-              ]}
-            />
-          </View>
+            {/* AI Section Header */}
+            <View style={styles.aiSectionHeader}>
+              <View style={styles.aiHeaderContainer}>
+                <View
+                  style={[
+                    styles.aiHeaderIcon,
+                    {
+                      backgroundColor: colors.tint + "15",
+                      borderColor: colors.tint + "30",
+                    },
+                  ]}
+                >
+                  <IconSymbol name="plus" size={24} color={colors.tint} />
+                </View>
+                <Text style={[styles.aiTitle, { color: colors.text }]}>
+                  AI-Powered Generation
+                </Text>
+                <Text
+                  style={[styles.aiSubtitle, { color: colors.text + "70" }]}
+                >
+                  Let AI analyze your content and create perfect flashcards
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.aiConnectionLine,
+                  { backgroundColor: colors.tint + "30" },
+                ]}
+              />
+            </View>
 
-          <View style={styles.methodsGrid}>
-            {/* AI-Powered Methods */}
-            <View style={styles.aiMethodsSection}>
-              {methods
-                .filter((method) => method.id !== "manual")
-                .map((method) => (
-                  <View key={method.id}>
+            <View style={styles.methodsGrid}>
+              {/* AI-Powered Methods */}
+              <View style={styles.aiMethodsSection}>
+                {methods
+                  .filter((method) => method.id !== "manual")
+                  .map((method) => (
                     <TouchableOpacity
-                      style={[
-                        styles.methodCard,
-                        selectedMethod === method.id &&
-                          styles.selectedMethodCard,
-                      ]}
+                      key={method.id}
+                      style={styles.methodCard}
                       onPress={() => setSelectedMethod(method.id)}
                       activeOpacity={0.8}
                     >
@@ -587,66 +766,50 @@ export default function CreateScreen() {
                         <View style={styles.aiBadge}>
                           <Text style={styles.aiBadgeText}>AI</Text>
                         </View>
-
-                        {/* Selection Indicator */}
-                        {selectedMethod === method.id && (
-                          <View style={styles.selectedIndicator}>
-                            <IconSymbol
-                              name="checkmark.circle.fill"
-                              size={24}
-                              color="white"
-                            />
-                          </View>
-                        )}
                       </LinearGradient>
                     </TouchableOpacity>
-
-                    {/* Form appears directly below selected method */}
-                    {selectedMethod === method.id && renderForm()}
-                  </View>
-                ))}
-            </View>
-
-            {/* Separator */}
-            <View style={styles.methodsSeparator}>
-              <View
-                style={[
-                  styles.separatorLine,
-                  { backgroundColor: colors.text + "20" },
-                ]}
-              />
-              <View
-                style={[
-                  styles.separatorTextContainer,
-                  { backgroundColor: colors.background },
-                ]}
-              >
-                <Text
-                  style={[styles.separatorText, { color: colors.text + "60" }]}
-                >
-                  or
-                </Text>
+                  ))}
               </View>
-              <View
-                style={[
-                  styles.separatorLine,
-                  { backgroundColor: colors.text + "20" },
-                ]}
-              />
-            </View>
 
-            {/* Manual Method */}
-            <View style={styles.manualMethodSection}>
-              {methods
-                .filter((method) => method.id === "manual")
-                .map((method) => (
-                  <View key={method.id}>
+              {/* Separator */}
+              <View style={styles.methodsSeparator}>
+                <View
+                  style={[
+                    styles.separatorLine,
+                    { backgroundColor: colors.text + "20" },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.separatorTextContainer,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.separatorText,
+                      { color: colors.text + "60" },
+                    ]}
+                  >
+                    or create manually
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.separatorLine,
+                    { backgroundColor: colors.text + "20" },
+                  ]}
+                />
+              </View>
+
+              {/* Manual Method */}
+              <View style={styles.manualMethodSection}>
+                {methods
+                  .filter((method) => method.id === "manual")
+                  .map((method) => (
                     <TouchableOpacity
-                      style={[
-                        styles.manualCard,
-                        selectedMethod === method.id &&
-                          styles.selectedManualCard,
-                      ]}
+                      key={method.id}
+                      style={styles.manualCard}
                       onPress={() => setSelectedMethod(method.id)}
                       activeOpacity={0.8}
                     >
@@ -705,27 +868,50 @@ export default function CreateScreen() {
                             Manual
                           </Text>
                         </View>
-
-                        {/* Selection Indicator */}
-                        {selectedMethod === method.id && (
-                          <View style={styles.selectedIndicatorManual}>
-                            <IconSymbol
-                              name="checkmark.circle.fill"
-                              size={20}
-                              color={colors.tint}
-                            />
-                          </View>
-                        )}
                       </View>
                     </TouchableOpacity>
-
-                    {/* Form appears directly below manual method */}
-                    {selectedMethod === method.id && renderForm()}
-                  </View>
-                ))}
+                  ))}
+              </View>
             </View>
           </View>
-        </View>
+        ) : (
+          // Form Display
+          <View style={styles.formContainer}>
+            <View style={styles.formSteps}>
+              <View style={[styles.step, { backgroundColor: colors.tint }]}>
+                <Text style={styles.stepText}>1</Text>
+              </View>
+              <View
+                style={[
+                  styles.stepLine,
+                  styles.stepLineActive,
+                  { backgroundColor: colors.tint },
+                ]}
+              />
+              <View
+                style={[
+                  styles.step,
+                  styles.activeStep,
+                  { backgroundColor: colors.tint },
+                ]}
+              >
+                <Text style={styles.stepText}>2</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.changeMethodButton}
+              onPress={() => setSelectedMethod(null)}
+            >
+              <IconSymbol name="chevron.left" size={16} color={colors.tint} />
+              <Text style={[styles.changeMethodText, { color: colors.tint }]}>
+                Change Method
+              </Text>
+            </TouchableOpacity>
+
+            {renderForm()}
+          </View>
+        )}
       </ScrollView>
 
       {/* Loading Modal */}
@@ -734,10 +920,21 @@ export default function CreateScreen() {
           <View
             style={[styles.loadingCard, { backgroundColor: colors.background }]}
           >
-            <ActivityIndicator size="large" color={colors.tint} />
-            <ThemedText style={styles.loadingText}>
-              Processing... {Math.round(progress * 100)}%
-            </ThemedText>
+            <View style={styles.loadingIconContainer}>
+              <ActivityIndicator size="large" color={colors.tint} />
+              <View
+                style={[
+                  styles.loadingPulse,
+                  { borderColor: colors.tint + "30" },
+                ]}
+              />
+            </View>
+            <Text style={[styles.loadingTitle, { color: colors.text }]}>
+              Generating Flashcards
+            </Text>
+            <Text style={[styles.loadingText, { color: colors.text + "70" }]}>
+              AI is analyzing your content... {Math.round(progress * 100)}%
+            </Text>
             <View
               style={[
                 styles.progressBar,
@@ -762,28 +959,101 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerGradient: {
+    paddingTop: 60,
+    paddingBottom: 24,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: "center",
+    marginHorizontal: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "white",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 32,
+
+  // Method Selection Styles
+  methodSelection: {
+    padding: 24,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-  },
-  methodsContainer: {
-    paddingHorizontal: 24,
+  selectionHeader: {
+    alignItems: "center",
     marginBottom: 32,
+  },
+  selectionSteps: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  step: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  activeStep: {
+    shadowColor: "#667eea",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  stepText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "white",
+  },
+  stepLine: {
+    width: 40,
+    height: 2,
+    marginHorizontal: 8,
+  },
+  stepLineActive: {
+    shadowColor: "#667eea",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  selectionTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  selectionSubtitle: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
   },
 
   // AI Section Header styles (matching home screen)
@@ -813,14 +1083,14 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   aiTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
   },
   aiSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: "center",
     maxWidth: 280,
   },
@@ -868,10 +1138,6 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  selectedMethodCard: {
-    transform: [{ scale: 1.02 }],
-    shadowOpacity: 0.3,
   },
   methodGradient: {
     flexDirection: "row",
@@ -961,11 +1227,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-  selectedIndicator: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-  },
 
   // Manual card styles (matching home screen)
   manualCard: {
@@ -979,10 +1240,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: "rgba(107, 114, 128, 0.2)",
-  },
-  selectedManualCard: {
-    borderColor: "rgba(102, 126, 234, 0.4)",
-    shadowOpacity: 0.15,
   },
   manualContent: {
     flexDirection: "row",
@@ -1054,141 +1311,185 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  selectedIndicatorManual: {
-    position: "absolute",
-    top: 8,
-    left: 8,
+
+  // Form Container Styles
+  formContainer: {
+    padding: 24,
+  },
+  formSteps: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  changeMethodButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 24,
+  },
+  changeMethodText: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 4,
   },
 
-  // Form styles
-  formCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 16,
+  // Form Section Styles
+  formSection: {
+    borderRadius: 20,
+    overflow: "hidden",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "rgba(102, 126, 234, 0.15)",
+    shadowRadius: 20,
+    elevation: 8,
   },
-  inputContainer: {
-    marginBottom: 20,
+  formHeader: {
+    padding: 24,
+  },
+  formHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  formHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  formHeaderText: {
+    flex: 1,
+  },
+  formHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "white",
+    marginBottom: 4,
+  },
+  formHeaderSubtitle: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+    lineHeight: 18,
+  },
+  formContent: {
+    padding: 24,
+    gap: 24,
+  },
+
+  // Input Styles
+  inputGroup: {
+    gap: 8,
   },
   inputLabel: {
     fontSize: 16,
-    marginBottom: 8,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  inputHint: {
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
   },
   textInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     textAlignVertical: "top",
     minHeight: 120,
+    lineHeight: 22,
   },
   urlInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
+    minHeight: 50,
   },
   numberInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     width: 100,
+    textAlign: "center",
   },
+
+  // File Picker Styles
   filePickerButton: {
     borderWidth: 2,
     borderStyle: "dashed",
     borderRadius: 12,
     padding: 20,
+  },
+  filePickerContent: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+  },
+  filePickerTextContainer: {
+    flex: 1,
+    marginLeft: 12,
   },
   filePickerText: {
     fontSize: 16,
-    marginTop: 8,
     fontWeight: "500",
   },
-  submitButton: {
+  filePickerHint: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  // Manual Cards Styles
+  manualCardsContainer: {
+    gap: 16,
+  },
+  manualCardItem: {
     borderRadius: 12,
     padding: 16,
-    alignItems: "center",
-    marginTop: 20,
+    borderWidth: 1.5,
+    borderColor: "rgba(107, 114, 128, 0.2)",
+    gap: 12,
   },
-  submitButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  loadingOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingCard: {
-    margin: 40,
-    padding: 32,
-    borderRadius: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  loadingText: {
-    fontSize: 16,
-    marginTop: 16,
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  progressBar: {
-    width: 200,
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  manualCardContainer: {
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-  },
-  cardHeader: {
+  manualCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
-  cardNumber: {
-    fontSize: 14,
+  cardBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  cardBadgeText: {
+    fontSize: 12,
     fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  removeCardButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 71, 87, 0.1)",
   },
   questionInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: 15,
     minHeight: 60,
     textAlignVertical: "top",
   },
   answerInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
+    fontSize: 15,
     minHeight: 80,
     textAlignVertical: "top",
   },
@@ -1196,15 +1497,90 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
-    borderWidth: 1,
+    padding: 16,
+    borderWidth: 2,
     borderStyle: "dashed",
-    borderRadius: 8,
-    marginTop: 8,
+    borderRadius: 12,
+    gap: 8,
   },
   addCardText: {
-    marginLeft: 8,
     fontSize: 16,
     fontWeight: "500",
+  },
+
+  // Submit Button
+  submitButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: "#667eea",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  submitButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+
+  // Loading Modal Styles
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingCard: {
+    margin: 40,
+    padding: 32,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+    minWidth: 280,
+  },
+  loadingIconContainer: {
+    position: "relative",
+    marginBottom: 24,
+  },
+  loadingPulse: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    top: -14,
+    left: -14,
+    opacity: 0.3,
+  },
+  loadingTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  loadingText: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  progressBar: {
+    width: 200,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
   },
 });
