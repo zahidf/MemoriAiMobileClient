@@ -8,9 +8,12 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
+import FeedbackButton from "@/components/FeedbackButton";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { FEEDBACK_CONFIG } from "../constants/FeedbackConfig";
 import { initDatabase, type User } from "../database/database";
 import LoginScreen from "../screens/LoginScreen";
 import {
@@ -19,6 +22,7 @@ import {
   getCurrentUser,
   isSignedIn,
 } from "../services/authService";
+import { feedbackService } from "../services/feedbackService";
 
 // Set this to true to automatically use mock authentication for development
 const USE_MOCK_AUTH = true;
@@ -33,9 +37,26 @@ export default function RootLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Configure feedback service immediately when component mounts
+  useEffect(() => {
+    feedbackService.configure({
+      apiKey: FEEDBACK_CONFIG.BREVO_API_KEY,
+      senderEmail: FEEDBACK_CONFIG.SENDER_EMAIL,
+      recipientEmail: FEEDBACK_CONFIG.RECIPIENT_EMAIL,
+    });
+  }, []);
+
+  // Initialize app and retry pending feedback when authenticated
   useEffect(() => {
     initializeApp();
   }, []);
+
+  // Retry pending feedback when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      feedbackService.retryPendingFeedback();
+    }
+  }, [isAuthenticated]);
 
   const initializeApp = async () => {
     try {
@@ -96,45 +117,54 @@ export default function RootLayout() {
 
   if (!loaded || isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
-      </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#667eea" />
+        </View>
+      </GestureHandlerRootView>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        <FeedbackButton isVisible={false} />
         <StatusBar style="auto" />
-      </>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="review-cards"
-          options={{
-            title: "Review Cards",
-            presentation: "modal",
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="study"
-          options={{
-            title: "Study",
-            headerShown: false,
-            presentation: "modal",
-          }}
-        />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="review-cards"
+            options={{
+              title: "Review Cards",
+              presentation: "modal",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="study"
+            options={{
+              title: "Study",
+              headerShown: false,
+              presentation: "modal",
+            }}
+          />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+
+        {/* Feedback button appears on all screens when authenticated */}
+        <FeedbackButton isVisible={isAuthenticated} />
+
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

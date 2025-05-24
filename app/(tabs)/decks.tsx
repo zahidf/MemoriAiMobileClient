@@ -177,7 +177,7 @@ export default function DecksScreen() {
       return;
     }
 
-    router.push(`./study?deckId=${deck.id}`);
+    router.push(`/study?deckId=${deck.id}`);
   };
 
   const getDeckStatus = (deck: DeckWithStatsLocal) => {
