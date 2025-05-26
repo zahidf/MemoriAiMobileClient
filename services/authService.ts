@@ -1,17 +1,26 @@
+import { GOOGLE_IOS_CLIENT_ID, GOOGLE_WEB_CLIENT_ID } from "@env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  GoogleSignin,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
-import Constants from "expo-constants";
 import { getDatabase, type User } from "../database/database";
-
-const USER_KEY = "current_user";
 
 // Set this to false for production builds
 const USE_MOCK_AUTH = true;
 
-// Type definitions to handle different API versions
+// Conditionally import Google Sign-In only when not using mock auth
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+
+if (!USE_MOCK_AUTH) {
+  try {
+    const googleSignInModule = require("@react-native-google-signin/google-signin");
+    GoogleSignin = googleSignInModule.GoogleSignin;
+    statusCodes = googleSignInModule.statusCodes;
+  } catch (error) {
+    console.log("Google Sign-In module not available");
+  }
+}
+
+const USER_KEY = "current_user";
+
 interface GoogleUserInfo {
   id: string;
   name?: string | null;
@@ -31,9 +40,16 @@ interface GoogleSignInResult {
 
 // Google Sign-In Configuration
 export const configureGoogleSignIn = (): void => {
+  if (USE_MOCK_AUTH || !GoogleSignin) {
+    console.log(
+      "Mock auth enabled or Google Sign-In not available - skipping configuration"
+    );
+    return;
+  }
+
   try {
-    const webClientId = Constants.expoConfig?.extra?.GOOGLE_WEB_CLIENT_ID;
-    const iosClientId = Constants.expoConfig?.extra?.GOOGLE_IOS_CLIENT_ID;
+    const webClientId = GOOGLE_WEB_CLIENT_ID;
+    const iosClientId = GOOGLE_IOS_CLIENT_ID;
 
     if (!webClientId || !iosClientId) {
       throw new Error(
@@ -44,17 +60,9 @@ export const configureGoogleSignIn = (): void => {
     GoogleSignin.configure({
       webClientId,
       iosClientId,
-
-      // Request offline access (server-side access)
       offlineAccess: true,
-
-      // Force refresh token for Android
       forceCodeForRefreshToken: true,
-
-      // Optional: Hosted domain restriction
       hostedDomain: "",
-
-      // Optional: Account name for Android
       accountName: "",
     });
     console.log("Google Sign In configured successfully");
@@ -102,43 +110,21 @@ export const createMockUser = async (): Promise<User> => {
   }
 };
 
-// Extract user data from different API response formats
-const extractUserFromResponse = (response: any): GoogleUserInfo | null => {
-  // Handle different response formats from different library versions
-  if (response?.data?.user) {
-    return response.data.user;
-  }
-  if (response?.user) {
-    return response.user;
-  }
-  if (response?.type === "success" && response?.data?.user) {
-    return response.data.user;
-  }
-  return null;
-};
-
-// Sign in with Google
+// Sign in with Google - Updated to handle mock auth properly
 export const signInWithGoogle = async (): Promise<User | null> => {
-  if (USE_MOCK_AUTH) {
-    console.log("Using mock authentication for development");
+  if (USE_MOCK_AUTH || !GoogleSignin) {
+    console.log("Using mock authentication");
     return await createMockUser();
   }
 
   try {
-    // Check if device supports Google Play Services (Android)
-    try {
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
-    } catch (playServicesError) {
-      console.log("Play Services check failed, continuing anyway");
-    }
+    await GoogleSignin.hasPlayServices({
+      showPlayServicesUpdateDialog: true,
+    });
 
-    // Attempt to sign in
     const response = await GoogleSignin.signIn();
     console.log("Google Sign-In response:", JSON.stringify(response, null, 2));
 
-    // Extract user data from response (handles different API versions)
     const googleUser = extractUserFromResponse(response);
 
     if (googleUser) {
@@ -152,19 +138,20 @@ export const signInWithGoogle = async (): Promise<User | null> => {
   } catch (error: any) {
     console.error("Google Sign In error:", error);
 
-    // Handle specific error codes
-    if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+    if (statusCodes && error.code === statusCodes.SIGN_IN_CANCELLED) {
       console.log("User cancelled the sign-in process");
       return null;
-    } else if (error.code === statusCodes.IN_PROGRESS) {
+    } else if (statusCodes && error.code === statusCodes.IN_PROGRESS) {
       console.log("Sign-in is in progress");
       return null;
-    } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+    } else if (
+      statusCodes &&
+      error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+    ) {
       console.log("Play Services not available - using fallback");
       return await createMockUser();
     } else {
       console.error("Unexpected sign-in error:", error.message);
-      // In development, fallback to mock user
       if (__DEV__) {
         console.log("Development mode: falling back to mock user");
         return await createMockUser();
@@ -174,81 +161,10 @@ export const signInWithGoogle = async (): Promise<User | null> => {
   }
 };
 
-// Save Google user to local database
-const saveUserToDatabase = async (
-  googleUser: GoogleUserInfo
-): Promise<User> => {
-  const db = getDatabase();
-
-  // Build user name from available fields
-  let userName = googleUser.name;
-  if (!userName && (googleUser.givenName || googleUser.familyName)) {
-    userName = `${googleUser.givenName || ""} ${
-      googleUser.familyName || ""
-    }`.trim();
-  }
-  if (!userName) {
-    userName = "Google User";
-  }
-
-  const user: User = {
-    google_id: googleUser.id,
-    email: googleUser.email,
-    name: userName,
-    profile_picture_url: googleUser.photo || undefined,
-  };
-
-  try {
-    // Check if user already exists
-    const existingUser = await db.getFirstAsync<User>(
-      "SELECT * FROM users WHERE google_id = ?",
-      [user.google_id]
-    );
-
-    if (existingUser) {
-      // Update existing user
-      await db.runAsync(
-        "UPDATE users SET email = ?, name = ?, profile_picture_url = ? WHERE google_id = ?",
-        [
-          user.email,
-          user.name,
-          user.profile_picture_url ?? null,
-          user.google_id,
-        ]
-      );
-      return {
-        ...existingUser,
-        email: user.email,
-        name: user.name,
-        profile_picture_url: user.profile_picture_url,
-      };
-    } else {
-      // Create new user
-      const result = await db.runAsync(
-        "INSERT INTO users (google_id, email, name, profile_picture_url) VALUES (?, ?, ?, ?)",
-        [
-          user.google_id,
-          user.email,
-          user.name,
-          user.profile_picture_url ?? null,
-        ]
-      );
-
-      return {
-        ...user,
-        id: result.lastInsertRowId,
-      };
-    }
-  } catch (error) {
-    console.error("Failed to save user to database:", error);
-    throw error;
-  }
-};
-
 // Sign out
 export const signOut = async (): Promise<void> => {
   try {
-    if (!USE_MOCK_AUTH) {
+    if (!USE_MOCK_AUTH && GoogleSignin) {
       await GoogleSignin.signOut();
     }
     await AsyncStorage.removeItem(USER_KEY);
@@ -273,10 +189,10 @@ export const getCurrentUser = async (): Promise<User | null> => {
   }
 };
 
-// Check if user is signed in (with fallback methods)
+// Check if user is signed in
 export const isSignedIn = async (): Promise<boolean> => {
   try {
-    if (USE_MOCK_AUTH) {
+    if (USE_MOCK_AUTH || !GoogleSignin) {
       const currentUser = await getCurrentUser();
       return currentUser !== null;
     }
@@ -289,10 +205,10 @@ export const isSignedIn = async (): Promise<boolean> => {
   }
 };
 
-// Get current user's access token (for API calls)
+// Get current user's access token
 export const getCurrentUserToken = async (): Promise<string | null> => {
   try {
-    if (USE_MOCK_AUTH) {
+    if (USE_MOCK_AUTH || !GoogleSignin) {
       return "mock_token_for_development";
     }
 
@@ -307,7 +223,7 @@ export const getCurrentUserToken = async (): Promise<string | null> => {
 // Refresh access token
 export const refreshAccessToken = async (): Promise<string | null> => {
   try {
-    if (USE_MOCK_AUTH) {
+    if (USE_MOCK_AUTH || !GoogleSignin) {
       return "mock_refreshed_token";
     }
 
@@ -316,5 +232,85 @@ export const refreshAccessToken = async (): Promise<string | null> => {
   } catch (error) {
     console.error("Failed to refresh access token:", error);
     return null;
+  }
+};
+
+// Helper functions
+const extractUserFromResponse = (response: any): GoogleUserInfo | null => {
+  if (response?.data?.user) {
+    return response.data.user;
+  }
+  if (response?.user) {
+    return response.user;
+  }
+  if (response?.type === "success" && response?.data?.user) {
+    return response.data.user;
+  }
+  return null;
+};
+
+const saveUserToDatabase = async (
+  googleUser: GoogleUserInfo
+): Promise<User> => {
+  const db = getDatabase();
+
+  let userName = googleUser.name;
+  if (!userName && (googleUser.givenName || googleUser.familyName)) {
+    userName = `${googleUser.givenName || ""} ${
+      googleUser.familyName || ""
+    }`.trim();
+  }
+  if (!userName) {
+    userName = "Google User";
+  }
+
+  const user: User = {
+    google_id: googleUser.id,
+    email: googleUser.email,
+    name: userName,
+    profile_picture_url: googleUser.photo || undefined,
+  };
+
+  try {
+    const existingUser = await db.getFirstAsync<User>(
+      "SELECT * FROM users WHERE google_id = ?",
+      [user.google_id]
+    );
+
+    if (existingUser) {
+      await db.runAsync(
+        "UPDATE users SET email = ?, name = ?, profile_picture_url = ? WHERE google_id = ?",
+        [
+          user.email,
+          user.name,
+          user.profile_picture_url ?? null,
+          user.google_id,
+        ]
+      );
+      return {
+        ...existingUser,
+        email: user.email,
+        name: user.name,
+        profile_picture_url: user.profile_picture_url,
+      };
+    } else {
+      const result = await db.runAsync(
+        "INSERT INTO users (google_id, email, name, profile_picture_url) VALUES (?, ?, ?, ?)",
+        [
+          user.google_id,
+          user.email,
+          user.name,
+          user.profile_picture_url ?? null,
+        ]
+      );
+
+      return {
+        ...user,
+        id: result.lastInsertRowId,
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save user to database:", error);
+    throw error;
   }
 };
