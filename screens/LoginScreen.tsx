@@ -8,14 +8,22 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { signInWithGoogle } from "../services/authService";
+import { createMockUser, signInWithGoogle } from "../services/authService";
 import type { User } from "../types";
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
+  onLoginError?: (error: string) => void;
+  authError?: string | null;
+  useMockAuth?: boolean;
 }
 
-export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
+export default function LoginScreen({
+  onLoginSuccess,
+  onLoginError,
+  authError,
+  useMockAuth = false,
+}: LoginScreenProps) {
   const [loading, setLoading] = useState(false);
 
   const handleGoogleSignIn = async () => {
@@ -26,31 +34,41 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       if (user) {
         onLoginSuccess(user);
       } else {
-        Alert.alert("Sign In Failed", "Unable to sign in with Google");
+        const errorMsg = "Unable to sign in with Google. Please try again.";
+        onLoginError?.(errorMsg);
+        Alert.alert("Sign In Failed", errorMsg);
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      Alert.alert(
-        "Sign In Error",
-        error.message || "An error occurred during sign in"
-      );
+      const errorMsg = error.message || "An error occurred during sign in";
+      onLoginError?.(errorMsg);
+      Alert.alert("Sign In Error", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   const handleMockSignIn = async () => {
+    if (!useMockAuth) {
+      Alert.alert(
+        "Not Available",
+        "Mock authentication is only available in development mode."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Use the signInWithGoogle function which will fall back to mock user
-      const user = await signInWithGoogle();
+      const user = await createMockUser();
       if (user) {
         onLoginSuccess(user);
       }
     } catch (error: any) {
       console.error("Mock login error:", error);
-      Alert.alert("Error", "Failed to sign in");
+      const errorMsg = "Failed to create test user";
+      onLoginError?.(errorMsg);
+      Alert.alert("Error", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -89,6 +107,17 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           </View>
         </View>
 
+        {/* Error Display */}
+        {authError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorTitle}>Authentication Error</Text>
+            <Text style={styles.errorText}>{authError}</Text>
+            <Text style={styles.errorHint}>
+              Please check your internet connection and try again.
+            </Text>
+          </View>
+        )}
+
         {/* Sign In Section */}
         <View style={styles.signInSection}>
           <Text style={styles.signInText}>
@@ -104,28 +133,54 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             <View style={styles.buttonsContainer}>
               {/* Primary Sign In Button */}
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[
+                  styles.primaryButton,
+                  authError && styles.buttonWithError,
+                ]}
                 onPress={handleGoogleSignIn}
+                disabled={loading}
               >
-                <Text style={styles.primaryButtonText}>
-                  Sign in with Google
-                </Text>
+                <View style={styles.buttonContent}>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.primaryButtonText}>
+                    Continue with Google
+                  </Text>
+                </View>
               </TouchableOpacity>
 
-              {/* Development Mock Button */}
-              <TouchableOpacity
-                style={styles.mockButton}
-                onPress={handleMockSignIn}
-              >
-                <Text style={styles.mockButtonText}>
-                  Continue as Test User (Development)
-                </Text>
-              </TouchableOpacity>
+              {/* Development Mock Button - Only show in development */}
+              {useMockAuth && (
+                <>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
 
-              <Text style={styles.developmentNote}>
-                Note: Google Sign In requires a development build. Use "Test
-                User" option for Expo Go development.
-              </Text>
+                  <TouchableOpacity
+                    style={styles.mockButton}
+                    onPress={handleMockSignIn}
+                    disabled={loading}
+                  >
+                    <Text style={styles.mockButtonText}>
+                      Continue as Test User
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.developmentNote}>
+                    Development Mode: Google Sign-In requires a development
+                    build. Use "Test User" option for Expo Go development.
+                  </Text>
+                </>
+              )}
+
+              {/* Privacy and Terms */}
+              <View style={styles.legalContainer}>
+                <Text style={styles.legalText}>
+                  By continuing, you agree to our Terms of Service and
+                  acknowledge that you have read our Privacy Policy.
+                </Text>
+              </View>
             </View>
           )}
         </View>
@@ -146,7 +201,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 60,
+    marginBottom: 50,
   },
   title: {
     fontSize: 36,
@@ -161,7 +216,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   features: {
-    marginBottom: 60,
+    marginBottom: 50,
   },
   feature: {
     flexDirection: "row",
@@ -179,6 +234,31 @@ const styles = StyleSheet.create({
     color: "#495057",
     flex: 1,
   },
+  errorContainer: {
+    backgroundColor: "#fff5f5",
+    borderWidth: 1,
+    borderColor: "#feb2b2",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#c53030",
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#c53030",
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: "#9c4221",
+    fontStyle: "italic",
+  },
   signInSection: {
     alignItems: "center",
   },
@@ -186,7 +266,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6c757d",
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 32,
     lineHeight: 22,
   },
   buttonsContainer: {
@@ -195,27 +275,69 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: "#667eea",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 16,
     width: "100%",
-    maxWidth: 300,
+    maxWidth: 320,
+    shadowColor: "#667eea",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  buttonWithError: {
+    backgroundColor: "#4299e1", // Slightly different shade when there's an error
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "white",
+    marginRight: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    width: 28,
+    height: 28,
+    textAlign: "center",
+    textAlignVertical: "center",
+    borderRadius: 14,
   },
   primaryButtonText: {
     color: "white",
     fontSize: 16,
     fontWeight: "600",
-    textAlign: "center",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+    width: "100%",
+    maxWidth: 320,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#e2e8f0",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: "#6c757d",
+    fontWeight: "500",
   },
   mockButton: {
     backgroundColor: "#28a745",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 16,
     width: "100%",
-    maxWidth: 300,
+    maxWidth: 320,
   },
   mockButtonText: {
     color: "white",
@@ -230,10 +352,21 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 8,
     paddingHorizontal: 16,
+    lineHeight: 16,
+  },
+  legalContainer: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+  },
+  legalText: {
+    fontSize: 12,
+    color: "#6c757d",
+    textAlign: "center",
+    lineHeight: 18,
   },
   loadingContainer: {
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 20,
   },
   loadingText: {
     marginTop: 12,

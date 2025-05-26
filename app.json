@@ -1,45 +1,57 @@
 {
   "expo": {
-    "name": "MemoriAiMobileClient",
+    "name": "MemoriAI",
     "slug": "MemoriAiMobileClient",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "memoriaimobileclient",
+    "scheme": "memoriai",
+    "icon": "./assets/icons/splash-icon-dark.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zahidf.MemoriAiMobileClient",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+      "bundleIdentifier": "com.zahidf.memoriai",
+      "buildNumber": "1",
+      "icon": {
+        "dark": "./assets/icons/ios-dark.png",
+        "light": "./assets/icons/ios-light.png",
+        "tinted": "./assets/icons/ios-tinted.png"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.zahidf.MemoriAiMobileClient"
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to allow you to upload images for flashcard creation.",
+        "NSCameraUsageDescription": "This app needs access to camera to allow you to take photos for flashcard creation.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone for voice notes and audio features."
+      },
+      "config": {
+        "googleSignIn": {
+          "reservedClientId": "${GOOGLE_IOS_CLIENT_ID}"
+        }
+      }
     },
     "plugins": [
       "expo-router",
+      "expo-sqlite",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID_SUFFIX}"
+        }
+      ],
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/icons/splash-icon-dark.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/icons/splash-icon-light.png",
+            "backgroundColor": "#000000"
+          }
         }
-      ],
-      "expo-sqlite"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -48,7 +60,13 @@
       "router": {},
       "eas": {
         "projectId": "dc329b54-f841-44fb-b5f9-d62a728eadf6"
-      }
-    }
+      },
+      "GOOGLE_WEB_CLIENT_ID": "${GOOGLE_WEB_CLIENT_ID}",
+      "GOOGLE_IOS_CLIENT_ID": "${GOOGLE_IOS_CLIENT_ID}",
+      "GOOGLE_IOS_CLIENT_ID_SUFFIX": "${GOOGLE_IOS_CLIENT_ID_SUFFIX}",
+      "BREVO_API_KEY": "${BREVO_API_KEY}",
+      "FEEDBACK_EMAIL": "${FEEDBACK_EMAIL}"
+    },
+    "owner": "zahidf"
   }
 }

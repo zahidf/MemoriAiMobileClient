@@ -24,8 +24,8 @@ import {
 } from "../services/authService";
 import { feedbackService } from "../services/feedbackService";
 
-// Set this to true to automatically use mock authentication for development
-const USE_MOCK_AUTH = true;
+// Set this to false for production builds
+const USE_MOCK_AUTH = __DEV__; // Only use mock auth in development
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -36,6 +36,7 @@ export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Configure feedback service immediately when component mounts
   useEffect(() => {
@@ -60,6 +61,8 @@ export default function RootLayout() {
 
   const initializeApp = async () => {
     try {
+      setAuthError(null);
+
       // Initialize database first
       await initDatabase();
       console.log("Database initialized");
@@ -71,8 +74,9 @@ export default function RootLayout() {
         setUser(mockUser);
         setIsAuthenticated(true);
       } else {
-        // Try to configure Google Sign In
+        // Production authentication flow
         try {
+          // Configure Google Sign In
           configureGoogleSignIn();
           console.log("Google Sign In configured");
 
@@ -83,27 +87,36 @@ export default function RootLayout() {
             if (currentUser) {
               setUser(currentUser);
               setIsAuthenticated(true);
+              console.log("User already authenticated:", currentUser.name);
             }
           }
-        } catch (error) {
-          console.error("Google Sign In configuration failed:", error);
-          console.log("Falling back to mock user");
+        } catch (error: any) {
+          console.error("Google Sign In initialization error:", error);
+          setAuthError(error.message || "Failed to initialize authentication");
 
-          // Fallback to mock user
+          // Don't fallback to mock in production - let user see the error
+          if (__DEV__) {
+            console.log("Development mode: falling back to mock user");
+            const mockUser = await createMockUser();
+            setUser(mockUser);
+            setIsAuthenticated(true);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("App initialization error:", error);
+      setAuthError(error.message || "Failed to initialize app");
+
+      // Only fallback to mock user in development
+      if (__DEV__) {
+        try {
           const mockUser = await createMockUser();
           setUser(mockUser);
           setIsAuthenticated(true);
+          setAuthError(null);
+        } catch (mockError) {
+          console.error("Failed to create mock user:", mockError);
         }
-      }
-    } catch (error) {
-      console.error("App initialization error:", error);
-      // Even if there's an error, create a mock user so the app can function
-      try {
-        const mockUser = await createMockUser();
-        setUser(mockUser);
-        setIsAuthenticated(true);
-      } catch (mockError) {
-        console.error("Failed to create mock user:", mockError);
       }
     } finally {
       setIsLoading(false);
@@ -113,6 +126,13 @@ export default function RootLayout() {
   const handleLoginSuccess = (user: User) => {
     setUser(user);
     setIsAuthenticated(true);
+    setAuthError(null);
+    console.log("Login successful for user:", user.name);
+  };
+
+  const handleLoginError = (error: string) => {
+    setAuthError(error);
+    console.error("Login error:", error);
   };
 
   if (!loaded || isLoading) {
@@ -128,7 +148,12 @@ export default function RootLayout() {
   if (!isAuthenticated) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onLoginError={handleLoginError}
+          authError={authError}
+          useMockAuth={USE_MOCK_AUTH}
+        />
         <FeedbackButton isVisible={false} />
         <StatusBar style="auto" />
       </GestureHandlerRootView>
