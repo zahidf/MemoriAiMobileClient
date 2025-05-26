@@ -9,7 +9,7 @@ import { getDatabase, type User } from "../database/database";
 const USER_KEY = "current_user";
 
 // Set this to false for production builds
-const USE_MOCK_AUTH = false;
+const USE_MOCK_AUTH = true;
 
 // Type definitions to handle different API versions
 interface GoogleUserInfo {
