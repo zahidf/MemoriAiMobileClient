@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import YouTubeTranscriptExtractor from "../../components/YoutubeTranscriptExtractor";
 
 const API_BASE_URL = "https://memori-ai.com";
 
@@ -43,11 +44,14 @@ const PROGRESS_STAGES = {
     { stage: "Finalizing...", duration: 1000, progressEnd: 100 },
   ],
   youtube: [
-    { stage: "Fetching video information...", duration: 2000, progressEnd: 15 },
-    { stage: "Downloading transcript...", duration: 3000, progressEnd: 35 },
-    { stage: "Processing video content...", duration: 2500, progressEnd: 55 },
-    { stage: "Analyzing content with AI...", duration: 4000, progressEnd: 80 },
-    { stage: "Generating flashcards...", duration: 2500, progressEnd: 95 },
+    { stage: "Processing video content...", duration: 2500, progressEnd: 25 },
+    { stage: "Analyzing transcript...", duration: 3000, progressEnd: 50 },
+    {
+      stage: "Generating questions with AI...",
+      duration: 4000,
+      progressEnd: 80,
+    },
+    { stage: "Creating flashcards...", duration: 2500, progressEnd: 95 },
     { stage: "Finalizing...", duration: 1000, progressEnd: 100 },
   ],
 };
@@ -64,6 +68,7 @@ export default function CreateScreen() {
     (method as CreationMethod) || null
   );
   const [showMethodSwitcher, setShowMethodSwitcher] = useState(false);
+  const [showYouTubeExtractor, setShowYouTubeExtractor] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [simulatedProgress, setSimulatedProgress] = useState(0);
@@ -71,9 +76,10 @@ export default function CreateScreen() {
   const [taskId, setTaskId] = useState<string | null>(null);
 
   const [textInput, setTextInput] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [numPairs, setNumPairs] = useState("10");
   const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [extractedTranscript, setExtractedTranscript] = useState("");
+  const [videoTitle, setVideoTitle] = useState("");
 
   const [manualCards, setManualCards] = useState<
     Array<{ question: string; answer: string }>
@@ -129,7 +135,66 @@ export default function CreateScreen() {
   const currentMethodConfig = methods.find((m) => m.id === selectedMethod);
 
   const handleMethodSelection = (methodId: CreationMethod) => {
-    setSelectedMethod(methodId);
+    if (methodId === "youtube") {
+      setShowYouTubeExtractor(true);
+    } else {
+      setSelectedMethod(methodId);
+    }
+  };
+
+  const handleTranscriptExtracted = (transcript: string, title: string) => {
+    setExtractedTranscript(transcript);
+    setVideoTitle(title);
+    setShowYouTubeExtractor(false);
+    setSelectedMethod("youtube");
+    processYouTubeTranscript(transcript, title);
+  };
+
+  const processYouTubeTranscript = async (
+    transcript: string,
+    title: string
+  ) => {
+    setLoading(true);
+    setProgress(0);
+    setSimulatedProgress(0);
+    setLoadingStage("Processing transcript...");
+
+    try {
+      startProgressSimulation("youtube");
+
+      const response = await fetch(`${API_BASE_URL}/process/text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: transcript,
+          num_pairs: parseInt(numPairs),
+          source_title: title,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.task_id) {
+        setTaskId(data.task_id);
+        pollStatus(data.task_id);
+      } else {
+        setLoading(false);
+        Alert.alert("Error", "No task ID received from server");
+      }
+    } catch (error) {
+      console.error("YouTube processing error:", error);
+      Alert.alert("Error", "Failed to process YouTube transcript");
+      setLoading(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    }
   };
 
   const pickDocument = async () => {
@@ -224,13 +289,12 @@ export default function CreateScreen() {
           response = await processText();
           break;
         case "youtube":
-          if (!youtubeUrl.trim()) {
-            Alert.alert("Error", "Please enter a YouTube URL");
+          if (!extractedTranscript.trim()) {
+            Alert.alert("Error", "No transcript available");
             setLoading(false);
             return;
           }
-          response = await processYoutube();
-          break;
+          return;
         case "manual":
           const validCards = manualCards.filter(
             (card) => card.question.trim() && card.answer.trim()
@@ -302,25 +366,6 @@ export default function CreateScreen() {
       },
       body: JSON.stringify({
         text: textInput,
-        num_pairs: parseInt(numPairs),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  };
-
-  const processYoutube = async () => {
-    const response = await fetch(`${API_BASE_URL}/process/youtube`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: youtubeUrl,
         num_pairs: parseInt(numPairs),
       }),
     });
@@ -642,28 +687,45 @@ export default function CreateScreen() {
             <>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>
-                  YouTube Video URL
+                  Video Content
                 </Text>
-                <TextInput
+                <View
                   style={[
-                    styles.urlInput,
+                    styles.youtubePreview,
                     {
-                      backgroundColor: colors.background,
-                      borderColor: colors.text + "20",
-                      color: colors.text,
+                      backgroundColor: colors.tint + "10",
+                      borderColor: colors.tint + "30",
                     },
                   ]}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  placeholderTextColor={colors.text + "40"}
-                  value={youtubeUrl}
-                  onChangeText={setYoutubeUrl}
-                  keyboardType="url"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text style={[styles.inputHint, { color: colors.text + "50" }]}>
-                  Enter any YouTube video URL to generate cards from its content
-                </Text>
+                >
+                  <IconSymbol name="play.fill" size={24} color={colors.tint} />
+                  <View style={styles.youtubePreviewText}>
+                    <Text
+                      style={[styles.youtubeTitle, { color: colors.text }]}
+                      numberOfLines={2}
+                    >
+                      {videoTitle || "YouTube Video Transcript"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.youtubeDetails,
+                        { color: colors.text + "70" },
+                      ]}
+                    >
+                      {extractedTranscript.length} characters extracted
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.youtubeChangeButton}
+                    onPress={() => setShowYouTubeExtractor(true)}
+                  >
+                    <Text
+                      style={[styles.youtubeChangeText, { color: colors.tint }]}
+                    >
+                      Change
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.inputGroup}>
@@ -927,6 +989,15 @@ export default function CreateScreen() {
 
       {renderMethodSwitcher()}
 
+      {showYouTubeExtractor && (
+        <Modal visible={showYouTubeExtractor} animationType="slide">
+          <YouTubeTranscriptExtractor
+            onTranscriptExtracted={handleTranscriptExtracted}
+            onCancel={() => setShowYouTubeExtractor(false)}
+          />
+        </Modal>
+      )}
+
       <Modal visible={loading} transparent>
         <View style={styles.loadingOverlay}>
           <View
@@ -1041,7 +1112,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-
   methodSelection: {
     padding: 24,
   },
@@ -1122,7 +1192,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
   },
-
   methodSwitcherOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -1189,7 +1258,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-
   formSection: {
     margin: 24,
     borderRadius: 20,
@@ -1234,7 +1302,6 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 24,
   },
-
   inputGroup: {
     gap: 8,
   },
@@ -1257,13 +1324,6 @@ const styles = StyleSheet.create({
     minHeight: 120,
     lineHeight: 22,
   },
-  urlInput: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    minHeight: 50,
-  },
   numberInput: {
     borderWidth: 1.5,
     borderRadius: 12,
@@ -1272,7 +1332,6 @@ const styles = StyleSheet.create({
     width: 100,
     textAlign: "center",
   },
-
   filePickerButton: {
     borderWidth: 2,
     borderStyle: "dashed",
@@ -1295,7 +1354,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-
+  youtubePreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  youtubePreviewText: {
+    flex: 1,
+  },
+  youtubeTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  youtubeDetails: {
+    fontSize: 12,
+  },
+  youtubeChangeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  youtubeChangeText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
   manualCardsContainer: {
     gap: 16,
   },
@@ -1357,7 +1442,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
-
   submitButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1376,7 +1460,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-
   loadingOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -1442,10 +1525,6 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 3,
-  },
-  progressPercentage: {
-    fontSize: 14,
-    fontWeight: "600",
   },
   estimatedTime: {
     fontSize: 12,

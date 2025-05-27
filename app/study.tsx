@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,15 +23,14 @@ import {
 import type { CardWithStudyData } from "../types";
 import { calculateDueDateString, calculateSM2 } from "../utils/sm2Algorithm";
 
-// Learning phase configuration
-const LEARNING_STEPS = [1, 10]; // minutes - first review after 1 min, then 10 min
-const GRADUATION_INTERVAL = 1; // days - when card graduates to review phase
-const EASY_INTERVAL = 4; // days - when "Easy" is pressed on learning card
+const LEARNING_STEPS = [1, 10];
+const GRADUATION_INTERVAL = 1;
+const EASY_INTERVAL = 4;
 
 interface LearningCard extends CardWithStudyData {
-  learningStep: number; // which learning step (0, 1, etc.)
-  nextReviewTime: Date; // when this card should be shown next in session
-  isLearning: boolean; // true if card is in learning phase
+  learningStep: number;
+  nextReviewTime: Date;
+  isLearning: boolean;
 }
 
 export default function StudyScreen() {
@@ -47,21 +47,18 @@ export default function StudyScreen() {
   const [cardsStudied, setCardsStudied] = useState(0);
   const [sessionStartTime] = useState(new Date());
 
-  // Animation and transition state
   const scaleAnimation = new Animated.Value(1);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [displayedCard, setDisplayedCard] = useState<LearningCard | null>(null);
 
-  // Timer for checking learning cards
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadDueCards();
 
-    // Set up timer to check for learning cards every 30 seconds
     timerRef.current = setInterval(() => {
       checkForNewlyDueCards();
-    }, 30000); // Check every 30 seconds
+    }, 30000);
 
     return () => {
       if (timerRef.current) {
@@ -70,7 +67,6 @@ export default function StudyScreen() {
     };
   }, [deckId]);
 
-  // Update displayed card when available cards change or current index changes
   useEffect(() => {
     const availableCards = getAvailableCards();
     if (
@@ -82,7 +78,6 @@ export default function StudyScreen() {
     }
   }, [allCards, currentCardIndex, showAnswer]);
 
-  // Check if any learning cards have become due
   const checkForNewlyDueCards = () => {
     const now = new Date();
     const availableCards = getAvailableCards();
@@ -95,12 +90,10 @@ export default function StudyScreen() {
 
     if (learningCardsReady.length > 0) {
       console.log(`${learningCardsReady.length} learning cards are now ready`);
-      // Force a re-render by updating the state slightly
       setAllCards((prevCards) => [...prevCards]);
     }
   };
 
-  // Get cards that are ready to be studied right now
   const getAvailableCards = (): LearningCard[] => {
     const now = new Date();
     const available = allCards
@@ -120,13 +113,12 @@ export default function StudyScreen() {
       setLoading(true);
       const dueCards = await getDueCards(parseInt(deckId));
 
-      // Convert to learning cards
       const learningCards: LearningCard[] = dueCards.map((card) => ({
         ...card,
-        learningStep: card.repetitions === 0 ? 0 : -1, // New cards start at step 0, review cards at -1
-        nextReviewTime: new Date(), // Available immediately
+        learningStep: card.repetitions === 0 ? 0 : -1,
+        nextReviewTime: new Date(),
         isLearning:
-          card.repetitions === 0 || card.interval_days < GRADUATION_INTERVAL, // Learning if new or interval < 1 day
+          card.repetitions === 0 || card.interval_days < GRADUATION_INTERVAL,
       }));
 
       console.log(`Loaded ${learningCards.length} due cards`);
@@ -182,14 +174,11 @@ export default function StudyScreen() {
       );
 
       if (currentCard.isLearning) {
-        // Handle learning phase
         if (quality >= 3) {
-          // Correct answer in learning phase
           if (quality === 5) {
-            // Easy - graduate immediately to review phase
             const sm2Result = calculateSM2({
-              quality: 4, // Treat as "Good" for SM-2 calculation
-              repetitions: 1, // First repetition
+              quality: 4,
+              repetitions: 1,
               previousEaseFactor: currentCard.ease_factor,
               previousInterval: 0,
             });
@@ -203,10 +192,9 @@ export default function StudyScreen() {
               interval_days: EASY_INTERVAL,
               nextReviewTime: new Date(
                 Date.now() + EASY_INTERVAL * 24 * 60 * 60 * 1000
-              ), // Out of session
+              ),
             };
 
-            // Update database
             await updateCardStudyData(currentCard.id, {
               card_id: currentCard.id,
               ease_factor: newCard.ease_factor,
@@ -219,17 +207,15 @@ export default function StudyScreen() {
               `Card ${currentCard.id} graduated with Easy - interval ${EASY_INTERVAL} days`
             );
           } else {
-            // Good/Hard - advance to next learning step
             const nextStep = currentCard.learningStep + 1;
             console.log(
               `Advancing from step ${currentCard.learningStep} to step ${nextStep}`
             );
 
             if (nextStep >= LEARNING_STEPS.length) {
-              // Graduate to review phase
               const sm2Result = calculateSM2({
                 quality,
-                repetitions: 1, // First review
+                repetitions: 1,
                 previousEaseFactor: currentCard.ease_factor,
                 previousInterval: 0,
               });
@@ -243,10 +229,9 @@ export default function StudyScreen() {
                 interval_days: GRADUATION_INTERVAL,
                 nextReviewTime: new Date(
                   Date.now() + GRADUATION_INTERVAL * 24 * 60 * 60 * 1000
-                ), // Out of session
+                ),
               };
 
-              // Update database
               await updateCardStudyData(currentCard.id, {
                 card_id: currentCard.id,
                 ease_factor: newCard.ease_factor,
@@ -259,7 +244,6 @@ export default function StudyScreen() {
                 `Card ${currentCard.id} graduated to review phase - interval ${GRADUATION_INTERVAL} day`
               );
             } else {
-              // Stay in learning, advance to next step
               const nextReviewMinutes = LEARNING_STEPS[nextStep];
               newCard = {
                 ...currentCard,
@@ -275,7 +259,6 @@ export default function StudyScreen() {
             }
           }
         } else {
-          // Wrong answer - restart learning
           newCard = {
             ...currentCard,
             learningStep: 0,
@@ -289,7 +272,6 @@ export default function StudyScreen() {
           );
         }
       } else {
-        // Handle review phase (cards with interval >= 1 day)
         const sm2Result = calculateSM2({
           quality,
           repetitions: currentCard.repetitions,
@@ -298,7 +280,6 @@ export default function StudyScreen() {
         });
 
         if (quality >= 3) {
-          // Correct - schedule for future
           newCard = {
             ...currentCard,
             ease_factor: sm2Result.easeFactor,
@@ -306,10 +287,9 @@ export default function StudyScreen() {
             interval_days: sm2Result.interval,
             nextReviewTime: new Date(
               Date.now() + sm2Result.interval * 24 * 60 * 60 * 1000
-            ), // Out of session
+            ),
           };
 
-          // Update database
           await updateCardStudyData(currentCard.id, {
             card_id: currentCard.id,
             ease_factor: newCard.ease_factor,
@@ -322,7 +302,6 @@ export default function StudyScreen() {
             `Review card ${currentCard.id} scheduled for ${sm2Result.interval} days`
           );
         } else {
-          // Wrong - back to learning
           newCard = {
             ...currentCard,
             learningStep: 0,
@@ -334,25 +313,22 @@ export default function StudyScreen() {
             ),
           };
 
-          // Update database
           await updateCardStudyData(currentCard.id, {
             card_id: currentCard.id,
             ease_factor: currentCard.ease_factor,
             repetitions: 0,
             interval_days: 0,
-            due_date: new Date().toISOString(), // Due now
+            due_date: new Date().toISOString(),
           });
 
           console.log(`Review card ${currentCard.id} sent back to learning`);
         }
       }
 
-      // Update the card in our state
       setAllCards((prevCards) =>
         prevCards.map((card) => (card.id === currentCard.id ? newCard : card))
       );
 
-      // Quick scale animation for feedback
       Animated.sequence([
         Animated.timing(scaleAnimation, {
           toValue: 0.95,
@@ -368,17 +344,14 @@ export default function StudyScreen() {
 
       setCardsStudied(cardsStudied + 1);
 
-      // Move to next available card
       setTimeout(() => {
         const nextAvailableCards = getAvailableCards();
         if (nextAvailableCards.length === 0) {
-          // Check if there are learning cards that will become available soon
           const learningCards = allCards.filter(
             (card) => card.isLearning && card.nextReviewTime > new Date()
           );
 
           if (learningCards.length > 0) {
-            // Don't end session yet, learning cards will become available
             console.log(
               `No cards available now, but ${learningCards.length} learning cards will be ready soon`
             );
@@ -387,12 +360,11 @@ export default function StudyScreen() {
             setSessionComplete(true);
           }
         } else {
-          // Continue with next card
           setCurrentCardIndex(0);
         }
         setShowAnswer(false);
         setIsTransitioning(false);
-      }, 200); // Small delay for animation
+      }, 200);
     } catch (error) {
       console.error("Failed to update card:", error);
       Alert.alert("Error", "Failed to save your progress");
@@ -522,7 +494,6 @@ export default function StudyScreen() {
     );
   }
 
-  // Show waiting screen if no cards available but learning cards exist
   if (availableCards.length === 0 && learningCardsCount > 0) {
     const nextDueCard = allCards
       .filter((card) => card.isLearning && card.nextReviewTime > new Date())
@@ -600,7 +571,6 @@ export default function StudyScreen() {
                   { backgroundColor: colors.tint },
                 ]}
                 onPress={() => {
-                  // Force check for newly due cards
                   checkForNewlyDueCards();
                 }}
               >
@@ -615,7 +585,6 @@ export default function StudyScreen() {
     );
   }
 
-  // Rest of your component remains the same...
   const currentCard =
     displayedCard ||
     (availableCards.length > 0 ? availableCards[currentCardIndex] : null);
@@ -634,9 +603,8 @@ export default function StudyScreen() {
   const cardInfo = getCardTypeInfo(currentCard);
   const progress = ((currentCardIndex + 1) / availableCards.length) * 100;
 
-  // Card colors based on state
   const questionCardColor = cardInfo.color;
-  const answerCardColor = "#7ED321"; // Success green
+  const answerCardColor = "#7ED321";
   const questionTextColor = "#FFFFFF";
   const answerTextColor = "#2C3E50";
 
@@ -714,7 +682,12 @@ export default function StudyScreen() {
             </Text>
           </View>
 
-          <View style={styles.cardContent}>
+          <ScrollView
+            style={styles.cardContentScrollView}
+            contentContainerStyle={styles.cardContentContainer}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+          >
             <Text
               style={[
                 styles.cardText,
@@ -723,7 +696,7 @@ export default function StudyScreen() {
             >
               {showAnswer ? currentCard.answer : currentCard.question}
             </Text>
-          </View>
+          </ScrollView>
 
           <View
             style={[
@@ -755,8 +728,7 @@ export default function StudyScreen() {
 
             <View style={styles.ratingButtons}>
               {(currentCard.isLearning
-                ? // Learning phase buttons
-                  [
+                ? [
                     {
                       quality: 0,
                       label: "Again",
@@ -781,8 +753,7 @@ export default function StudyScreen() {
                       description: `${EASY_INTERVAL} days`,
                     },
                   ]
-                : // Review phase buttons
-                  [
+                : [
                     {
                       quality: 0,
                       label: "Again",
@@ -841,7 +812,6 @@ export default function StudyScreen() {
   );
 }
 
-// Styles remain the same as original...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -961,6 +931,7 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 32,
     minHeight: 320,
+    maxHeight: 450,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.25,
@@ -994,10 +965,14 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     opacity: 0.9,
   },
-  cardContent: {
+  cardContentScrollView: {
     flex: 1,
+    marginVertical: 16,
+  },
+  cardContentContainer: {
     justifyContent: "center",
-    paddingVertical: 16,
+    minHeight: 200,
+    paddingVertical: 8,
   },
   cardText: {
     fontSize: 19,
