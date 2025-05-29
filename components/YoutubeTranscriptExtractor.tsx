@@ -37,8 +37,11 @@ export default function YouTubeTranscriptExtractor({
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualTranscript, setManualTranscript] = useState("");
 
+  const [showInstructions, setShowInstructions] = useState(true);
+
   const injectedJavaScript = `
     (function() {
+      // Utility functions
       function sendMessage(data) {
         try {
           if (window.ReactNativeWebView) {
@@ -49,6 +52,36 @@ export default function YouTubeTranscriptExtractor({
         }
       }
       
+      function waitForElement(selector, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+          const startTime = Date.now();
+          
+          const checkInterval = setInterval(() => {
+            const element = document.querySelector(selector);
+            if (element) {
+              clearInterval(checkInterval);
+              resolve(element);
+            }
+            
+            if (Date.now() - startTime > timeout) {
+              clearInterval(checkInterval);
+              reject(new Error('Element not found: ' + selector));
+            }
+          }, 100);
+          hideInstructionsButton: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  hideInstructionsText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+});
+      }
+      
       function getVideoId() {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('v') || '';
@@ -57,14 +90,14 @@ export default function YouTubeTranscriptExtractor({
       function getVideoTitle() {
         const selectors = [
           'h1.ytd-video-primary-info-renderer yt-formatted-string',
-          'h1 yt-formatted-string',
-          '#title h1',
-          'h1.title',
+          'h1 yt-formatted-string.ytd-watch-metadata',
+          '#title h1 yt-formatted-string',
+          'h1.title.style-scope.ytd-video-primary-info-renderer',
           'meta[property="og:title"]'
         ];
         
-        for (let i = 0; i < selectors.length; i++) {
-          const element = document.querySelector(selectors[i]);
+        for (let selector of selectors) {
+          const element = document.querySelector(selector);
           if (element) {
             const text = element.textContent || element.getAttribute('content');
             if (text && text.trim()) {
@@ -89,107 +122,436 @@ export default function YouTubeTranscriptExtractor({
         });
       }
       
-      function findTranscriptButton() {
-        // Look for transcript button more comprehensively
-        const buttons = document.querySelectorAll('button, [role="button"]');
-        for (let i = 0; i < buttons.length; i++) {
-          const button = buttons[i];
-          const ariaLabel = button.getAttribute('aria-label') || '';
-          const text = button.textContent || '';
+      async function findAndClickTranscriptButton() {
+        try {
+          // First, try to find the three-dot menu button
+          const menuButtons = document.querySelectorAll('button[aria-label*="More actions" i], #button[aria-label*="More actions" i], ytd-menu-renderer button');
           
-          if (ariaLabel.toLowerCase().includes('transcript') || 
-              ariaLabel.toLowerCase().includes('show transcript') ||
-              text.toLowerCase().includes('transcript')) {
-            return button;
-          }
-        }
-        
-        // Try menu buttons
-        const menuButtons = document.querySelectorAll('#menu-button button, [aria-label*="More" i]');
-        return menuButtons.length > 0 ? menuButtons[0] : null;
-      }
-      
-      function extractExistingTranscript() {
-        let transcript = '';
-        let foundElements = 0;
-        
-        // Method 1: Look for transcript segments
-        const segmentSelectors = [
-          '.ytd-transcript-segment-renderer',
-          '[data-seq]',
-          '.segment-text',
-          '.cue-group-start-offset',
-          'ytd-transcript-segment-renderer .segment-text'
-        ];
-        
-        for (let i = 0; i < segmentSelectors.length; i++) {
-          const segments = document.querySelectorAll(segmentSelectors[i]);
-          foundElements += segments.length;
-          
-          for (let j = 0; j < segments.length; j++) {
-            const segment = segments[j];
-            const textElement = segment.querySelector('.segment-text') || segment;
-            const text = textElement.textContent || textElement.innerText || '';
-            
-            if (text && text.trim() && text.length > 2) {
-              // Skip timestamps (patterns like 0:00, 1:23, etc.)
-              if (!text.match(/^\\d+:\\d+/) && !text.match(/^\\d+$/)) {
-                transcript += text.trim() + ' ';
-              }
-            }
-          }
-          
-          if (transcript.length > 100) break;
-        }
-        
-        // Method 2: Look in transcript containers
-        const containerSelectors = [
-          '#segments-container',
-          '.ytd-transcript-segment-list-renderer',
-          '[target-id="engagement-panel-searchable-transcript"]',
-          '.engagement-panel-content-section-renderer',
-          '#structured-description'
-        ];
-        
-        if (transcript.length < 100) {
-          for (let i = 0; i < containerSelectors.length; i++) {
-            const container = document.querySelector(containerSelectors[i]);
-            if (container) {
-              foundElements++;
-              const allText = container.textContent || container.innerText || '';
+          for (let button of menuButtons) {
+            const isVisible = button.offsetParent !== null;
+            if (isVisible && button.querySelector('svg, yt-icon')) {
+              sendMessage({ type: 'debug_info', message: 'Found menu button, clicking...' });
+              button.click();
               
-              // Clean up the text
-              const lines = allText.split('\\n');
-              for (let j = 0; j < lines.length; j++) {
-                const line = lines[j].trim();
-                if (line && line.length > 3 && !line.match(/^\\d+:\\d+/) && !line.match(/^\\d+$/)) {
-                  transcript += line + ' ';
+              // Wait for menu to open
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // Look for transcript option in the menu
+              const transcriptOptions = document.querySelectorAll(
+                'ytd-menu-service-item-renderer, ' +
+                'tp-yt-paper-item, ' +
+                'ytd-menu-navigation-item-renderer, ' +
+                '[role="menuitem"]'
+              );
+              
+              for (let option of transcriptOptions) {
+                const text = option.textContent || '';
+                if (text.toLowerCase().includes('transcript') || 
+                    text.toLowerCase().includes('captions') ||
+                    text.toLowerCase().includes('subtitles')) {
+                  sendMessage({ type: 'debug_info', message: 'Found transcript option: ' + text });
+                  option.click();
+                  return true;
                 }
               }
-              
-              if (transcript.length > 100) break;
             }
           }
+          
+          // Alternative: Look for direct transcript button (some videos have it)
+          const directTranscriptButtons = document.querySelectorAll(
+            'button[aria-label*="transcript" i], ' +
+            'button[aria-label*="show transcript" i], ' +
+            '[aria-label*="transcript" i][role="button"]'
+          );
+          
+          for (let button of directTranscriptButtons) {
+            if (button.offsetParent !== null) {
+              sendMessage({ type: 'debug_info', message: 'Found direct transcript button' });
+              button.click();
+              return true;
+            }
+          }
+          
+          return false;
+        } catch (error) {
+          sendMessage({ type: 'debug_info', message: 'Error finding transcript button: ' + error.message });
+          return false;
         }
-        
-        sendMessage({
-          type: 'debug_info',
-          message: \`Found \${foundElements} elements, transcript length: \${transcript.length}\`
-        });
-        
-        return transcript.trim();
       }
       
-      function clickAndWait(element, callback, delay = 2000) {
-        if (element && typeof element.click === 'function') {
-          element.click();
-          setTimeout(callback, delay);
-        } else {
-          callback();
+      async function extractTranscriptFromPanel() {
+        try {
+          // Wait for transcript panel to load
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          let transcript = '';
+          const transcriptSelectors = [
+            // Primary selectors for transcript segments
+            'ytd-transcript-segment-list-renderer ytd-transcript-segment-renderer',
+            'ytd-transcript-body-renderer ytd-transcript-segment-renderer',
+            '.segment-text',
+            '[class*="transcript"][class*="segment"]',
+            'div[class*="cue"]',
+            'div[class*="caption-window"]',
+            '.ytp-caption-segment',
+            // Fallback selectors
+            '#segments-container ytd-transcript-segment-renderer',
+            'ytd-engagement-panel-section-list-renderer[target-id*="transcript"] .segment-text'
+          ];
+          
+          // Debug: Log what we're seeing
+          sendMessage({ 
+            type: 'debug_info', 
+            message: 'Document contains: ' + document.body.innerHTML.substring(0, 200) 
+          });
+          
+          for (let selector of transcriptSelectors) {
+            const segments = document.querySelectorAll(selector);
+            if (segments.length > 0) {
+              sendMessage({ type: 'debug_info', message: 'Found ' + segments.length + ' transcript segments with selector: ' + selector });
+              
+              segments.forEach((segment, index) => {
+                // Try multiple ways to get the text
+                let text = '';
+                
+                // For cue divs, get direct text content
+                if (selector.includes('cue')) {
+                  // Log the element structure for debugging
+                  if (index === 0) {
+                    sendMessage({ 
+                      type: 'debug_info', 
+                      message: 'First cue element HTML: ' + segment.outerHTML.substring(0, 200) 
+                    });
+                    sendMessage({ 
+                      type: 'debug_info', 
+                      message: 'First cue element text: ' + segment.textContent 
+                    });
+                  }
+                  
+                  // Try different methods to get text
+                  text = segment.textContent || segment.innerText || '';
+                  
+                  // If no text, try getting from all child elements
+                  if (!text) {
+                    const childTexts = [];
+                    segment.childNodes.forEach(node => {
+                      if (node.nodeType === Node.TEXT_NODE) {
+                        childTexts.push(node.textContent);
+                      } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        childTexts.push(node.textContent);
+                      }
+                    });
+                    text = childTexts.join(' ');
+                  }
+                  
+                  // Also try innerHTML and strip tags
+                  if (!text) {
+                    text = segment.innerHTML.replace(/<[^>]*>/g, ' ').trim();
+                  }
+                } else {
+                  // Method 1: Look for specific text element
+                  const textElement = segment.querySelector('.segment-text, [class*="text"], .cue-group-start-offset');
+                  if (textElement) {
+                    text = textElement.textContent || textElement.innerText || '';
+                  }
+                  
+                  // Method 2: Get all text content but filter out timestamps
+                  if (!text) {
+                    const clone = segment.cloneNode(true);
+                    // Remove timestamp elements
+                    const timestamps = clone.querySelectorAll('.segment-timestamp, [class*="timestamp"], [class*="time"]');
+                    timestamps.forEach(ts => ts.remove());
+                    text = clone.textContent || clone.innerText || '';
+                  }
+                }
+                
+                // Clean up the text
+                text = text.trim();
+                
+                // Log what we found for debugging
+                if (index < 5) { // Only log first 5 to avoid spam
+                  sendMessage({ 
+                    type: 'debug_info', 
+                    message: 'Segment ' + index + ' text: "' + text.substring(0, 50) + '"' 
+                  });
+                }
+                
+                // Skip if it's just a timestamp or too short
+                if (text && !text.match(/^\\d+:\\d+$/) && text.length > 2) {
+                  transcript += text + ' ';
+                }
+              });
+              
+              if (transcript.length > 50) {
+                sendMessage({ 
+                  type: 'debug_info', 
+                  message: 'Transcript collected: ' + transcript.length + ' chars' 
+                });
+                break;
+              }
+            }
+          }
+          
+          // Alternative method: Try to get text from the entire transcript panel
+          if (transcript.length < 50) {
+            const panelSelectors = [
+              'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]',
+              '#transcript-scrollbox',
+              '[target-id="engagement-panel-searchable-transcript"]',
+              'ytd-transcript-renderer',
+              '.caption-window',
+              '.ytp-caption-window-container'
+            ];
+            
+            for (let selector of panelSelectors) {
+              const panel = document.querySelector(selector);
+              if (panel) {
+                sendMessage({ type: 'debug_info', message: 'Found transcript panel: ' + selector });
+                
+                // Get all text from panel
+                const allTextElements = panel.querySelectorAll('*');
+                allTextElements.forEach(element => {
+                  // Only get text from leaf nodes
+                  if (element.childElementCount === 0) {
+                    const text = element.textContent?.trim() || '';
+                    if (text && !text.match(/^\\d+:\\d+$/) && text.length > 2 && 
+                        !text.includes('Search in video') && 
+                        !text.includes('Transcript') &&
+                        !text.includes('Follow along')) {
+                      transcript += text + ' ';
+                    }
+                  }
+                });
+                
+                if (transcript.length > 50) {
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Final attempt: Look for any div with substantial text content
+          if (transcript.length < 50) {
+            sendMessage({ type: 'debug_info', message: 'Trying final extraction method...' });
+            
+            // Look for divs that might contain transcript text
+            const allDivs = document.querySelectorAll('div');
+            const transcriptTexts = [];
+            
+            allDivs.forEach(div => {
+              const text = div.textContent?.trim() || '';
+              // Look for divs with substantial text that aren't UI elements
+              if (text.length > 20 && text.length < 500 && 
+                  !text.includes('Subscribe') && 
+                  !text.includes('Share') && 
+                  !text.includes('Download') &&
+                  !text.includes('views') &&
+                  !text.includes('ago') &&
+                  div.offsetParent !== null) { // Must be visible
+                
+                // Check if this div has many child elements (likely UI)
+                if (div.childElementCount < 5) {
+                  transcriptTexts.push(text);
+                }
+              }
+            });
+            
+            // If we found potential transcript text, use it
+            if (transcriptTexts.length > 5) {
+              transcript = transcriptTexts.join(' ');
+              sendMessage({ 
+                type: 'debug_info', 
+                message: 'Found ' + transcriptTexts.length + ' potential transcript segments' 
+              });
+            }
+          }
+          
+          return transcript.trim();
+        } catch (error) {
+          sendMessage({ type: 'debug_info', message: 'Error extracting transcript: ' + error.message });
+          return '';
         }
       }
       
-      function tryExtraction() {
+      // New function to extract from closed captions
+      async function extractFromClosedCaptions() {
+        try {
+          sendMessage({ type: 'debug_info', message: 'Attempting to extract from closed captions...' });
+          
+          // First, try to enable captions if they're not already on
+          const ccButton = document.querySelector('.ytp-subtitles-button');
+          if (ccButton && ccButton.getAttribute('aria-pressed') === 'false') {
+            ccButton.click();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          let captionText = '';
+          const startTime = Date.now();
+          
+          // Monitor captions for a period of time
+          return new Promise((resolve) => {
+            const captionObserver = setInterval(() => {
+              const captionSelectors = [
+                '.ytp-caption-segment',
+                '.captions-text',
+                '.ytp-caption-window-container',
+                'div[class*="caption"]',
+                '.ytp-cues-container',
+                'span[class*="ytp-caption"]'
+              ];
+              
+              for (let selector of captionSelectors) {
+                const captionElements = document.querySelectorAll(selector);
+                captionElements.forEach(element => {
+                  const text = element.textContent?.trim() || '';
+                  if (text && text.length > 1 && !captionText.includes(text)) {
+                    captionText += text + ' ';
+                    sendMessage({ 
+                      type: 'debug_info', 
+                      message: 'Caption text found: ' + text.substring(0, 30) + '...' 
+                    });
+                  }
+                });
+              }
+              
+              // Stop after 10 seconds or if we have enough text
+              if (Date.now() - startTime > 10000 || captionText.length > 500) {
+                clearInterval(captionObserver);
+                resolve(captionText);
+              }
+            }, 500);
+          });
+        } catch (error) {
+          sendMessage({ type: 'debug_info', message: 'CC extraction error: ' + error.message });
+          return '';
+        }
+      }
+      
+      // Force open transcript with multiple attempts
+      async function forceOpenTranscript() {
+        try {
+          sendMessage({ type: 'debug_info', message: 'Force opening transcript...' });
+          
+          // Method 1: Click description to ensure page is interactive
+          const descriptionButton = document.querySelector('#expand, #description');
+          if (descriptionButton) {
+            descriptionButton.click();
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          // Method 2: Find and click more actions button (three dots)
+          const moreActionsSelectors = [
+            'ytd-menu-renderer button[aria-label*="More" i]',
+            'ytd-menu-renderer #button',
+            'button.ytd-menu-renderer',
+            '[aria-label="More actions"]',
+            'yt-icon-button#button'
+          ];
+          
+          for (let selector of moreActionsSelectors) {
+            const buttons = document.querySelectorAll(selector);
+            for (let button of buttons) {
+              // Check if it's the right button (usually has three dots icon)
+              if (button.offsetParent !== null && 
+                  (button.querySelector('path[d*="M12"]') || 
+                   button.querySelector('svg') ||
+                   button.innerHTML.includes('more_vert'))) {
+                
+                sendMessage({ type: 'debug_info', message: 'Clicking more actions button...' });
+                button.click();
+                
+                // Wait for menu
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Find transcript option
+                const menuItems = document.querySelectorAll(
+                  'tp-yt-paper-item, ' +
+                  'ytd-menu-service-item-renderer, ' +
+                  'yt-formatted-string.ytd-menu-service-item-renderer'
+                );
+                
+                for (let item of menuItems) {
+                  const text = item.textContent?.toLowerCase() || '';
+                  if (text.includes('transcript') || text.includes('script')) {
+                    sendMessage({ type: 'debug_info', message: 'Found transcript menu item: ' + text });
+                    item.click();
+                    
+                    // Wait for transcript panel
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Now extract
+                    return await extractTranscriptFromPanel();
+                  }
+                }
+              }
+            }
+          }
+          
+          return '';
+          
+        } catch (error) {
+          sendMessage({ type: 'debug_info', message: 'Force open error: ' + error.message });
+          return '';
+        }
+      }
+      
+      // Try to use YouTube's player API to get captions
+      async function tryPlayerAPI() {
+        try {
+          sendMessage({ type: 'debug_info', message: 'Trying YouTube player API...' });
+          
+          // Get the video player
+          const player = document.querySelector('#movie_player');
+          if (player && player.getOptions) {
+            const options = player.getOptions();
+            sendMessage({ 
+              type: 'debug_info', 
+              message: 'Player options: ' + JSON.stringify(options).substring(0, 200) 
+            });
+            
+            // Try to get caption tracks
+            if (player.getOption && player.getOption('captions', 'tracklist')) {
+              const tracks = player.getOption('captions', 'tracklist');
+              sendMessage({ 
+                type: 'debug_info', 
+                message: 'Caption tracks: ' + JSON.stringify(tracks).substring(0, 200) 
+              });
+            }
+          }
+          
+          // Alternative: Check ytInitialPlayerResponse
+          if (window.ytInitialPlayerResponse) {
+            const captions = window.ytInitialPlayerResponse.captions;
+            if (captions) {
+              sendMessage({ 
+                type: 'debug_info', 
+                message: 'Found captions in ytInitialPlayerResponse' 
+              });
+              
+              // Try to get caption track URL
+              const captionTracks = captions.playerCaptionsTracklistRenderer?.captionTracks;
+              if (captionTracks && captionTracks.length > 0) {
+                const trackUrl = captionTracks[0].baseUrl;
+                sendMessage({ 
+                  type: 'debug_info', 
+                  message: 'Caption track URL found: ' + trackUrl 
+                });
+                
+                // Note: We can't fetch this URL directly from the browser due to CORS
+                // But we can send it to the app to fetch server-side if needed
+                return trackUrl;
+              }
+            }
+          }
+          
+          return null;
+        } catch (error) {
+          sendMessage({ type: 'debug_info', message: 'Player API error: ' + error.message });
+          return null;
+        }
+      }
+      
+      async function tryExtraction() {
         const videoId = getVideoId();
         if (!videoId) {
           sendMessage({ type: 'no_video_id' });
@@ -198,75 +560,106 @@ export default function YouTubeTranscriptExtractor({
         
         sendMessage({ type: 'extraction_started' });
         
-        // Step 1: Check if transcript is already visible
-        const existingTranscript = extractExistingTranscript();
-        if (existingTranscript && existingTranscript.length > 50) {
-          sendMessage({
-            type: 'transcript_found',
-            transcript: existingTranscript,
-            title: getVideoTitle(),
-            method: 'existing'
-          });
-          return;
-        }
-        
-        // Step 2: Try to find and click transcript button
-        const transcriptButton = findTranscriptButton();
-        if (transcriptButton) {
-          sendMessage({
-            type: 'debug_info',
-            message: \`Found button: \${transcriptButton.getAttribute('aria-label') || transcriptButton.textContent || 'unknown'}\`
-          });
+        try {
+          // Method 1: Direct extraction attempt
+          const directTranscript = await directTranscriptExtraction();
+          if (directTranscript && directTranscript.length > 50) {
+            sendMessage({
+              type: 'transcript_found',
+              transcript: directTranscript,
+              title: getVideoTitle(),
+              method: 'direct_extraction'
+            });
+            return;
+          }
           
-          clickAndWait(transcriptButton, function() {
-            // Check again after clicking
-            const newTranscript = extractExistingTranscript();
-            if (newTranscript && newTranscript.length > 50) {
+          // Method 2: Check if transcript panel is already open
+          let existingTranscript = await extractTranscriptFromPanel();
+          
+          if (existingTranscript && existingTranscript.length > 50) {
+            sendMessage({
+              type: 'transcript_found',
+              transcript: existingTranscript,
+              title: getVideoTitle(),
+              method: 'already_open'
+            });
+            return;
+          }
+          
+          // Method 2: Try YouTube player API
+          const apiResult = await tryPlayerAPI();
+          if (apiResult) {
+            sendMessage({
+              type: 'caption_url_found',
+              url: apiResult,
+              title: getVideoTitle()
+            });
+            return;
+          }
+          
+          // Method 3: Force open transcript
+          const forceTranscript = await forceOpenTranscript();
+          if (forceTranscript && forceTranscript.length > 50) {
+            sendMessage({
+              type: 'transcript_found',
+              transcript: forceTranscript,
+              title: getVideoTitle(),
+              method: 'forced_open'
+            });
+            return;
+          }
+          
+          // Method 4: Try to open transcript panel normally
+          const buttonClicked = await findAndClickTranscriptButton();
+          
+          if (buttonClicked) {
+            // Wait and extract
+            const transcript = await extractTranscriptFromPanel();
+            
+            if (transcript && transcript.length > 50) {
               sendMessage({
                 type: 'transcript_found',
-                transcript: newTranscript,
+                transcript: transcript,
                 title: getVideoTitle(),
-                method: 'after_click'
+                method: 'after_button_click'
               });
+              return;
             } else {
-              // Try clicking menu items
-              const menuItems = document.querySelectorAll('[role="menuitem"]');
-              let transcriptMenuItem = null;
-              
-              for (let i = 0; i < menuItems.length; i++) {
-                const item = menuItems[i];
-                const text = item.textContent || '';
-                if (text.toLowerCase().includes('transcript')) {
-                  transcriptMenuItem = item;
-                  break;
-                }
-              }
-              
-              if (transcriptMenuItem) {
-                clickAndWait(transcriptMenuItem, function() {
-                  const finalTranscript = extractExistingTranscript();
-                  if (finalTranscript && finalTranscript.length > 50) {
-                    sendMessage({
-                      type: 'transcript_found',
-                      transcript: finalTranscript,
-                      title: getVideoTitle(),
-                      method: 'menu_click'
-                    });
-                  } else {
-                    sendMessage({ type: 'no_transcript' });
-                  }
-                }, 3000); // Longer delay for menu interactions
-              } else {
-                sendMessage({ type: 'no_transcript' });
-              }
+              sendMessage({ 
+                type: 'debug_info', 
+                message: 'Transcript panel opened but no text found. Length: ' + transcript.length 
+              });
             }
+          }
+          
+          // Method 5: Try closed captions
+          sendMessage({ type: 'debug_info', message: 'Trying closed captions extraction...' });
+          const ccText = await extractFromClosedCaptions();
+          
+          if (ccText && ccText.length > 50) {
+            sendMessage({
+              type: 'transcript_found',
+              transcript: ccText,
+              title: getVideoTitle(),
+              method: 'closed_captions'
+            });
+          } else {
+            // Final attempt: Check for any transcript-like content on page
+            const pageText = document.body.innerText || '';
+            const transcriptMatch = pageText.match(/\[Music\]|\[Applause\]|\[Laughter\]/);
+            if (transcriptMatch) {
+              sendMessage({ 
+                type: 'debug_info', 
+                message: 'Found transcript markers but could not extract. Video may have auto-generated captions only.' 
+              });
+            }
+            sendMessage({ type: 'no_transcript' });
+          }
+        } catch (error) {
+          sendMessage({ 
+            type: 'extraction_error', 
+            error: error.message 
           });
-        } else {
-          sendMessage({
-            type: 'debug_info',
-            message: 'No transcript button found'
-          });
-          sendMessage({ type: 'no_transcript' });
         }
       }
       
@@ -275,12 +668,12 @@ export default function YouTubeTranscriptExtractor({
       const urlCheckInterval = setInterval(function() {
         if (location.href !== currentUrl) {
           currentUrl = location.href;
-          setTimeout(checkPage, 500);
+          setTimeout(checkPage, 1000);
         }
       }, 1000);
       
       // Initial check
-      setTimeout(checkPage, 1000);
+      setTimeout(checkPage, 1500);
       
       // Make extraction function global
       window.startExtraction = tryExtraction;
@@ -346,51 +739,34 @@ export default function YouTubeTranscriptExtractor({
           );
           break;
 
-        case "no_transcript":
+        case "caption_url_found":
           setExtracting(false);
+          console.log("Caption URL found:", data.url);
           Alert.alert(
-            "No Transcript Found",
-            "Could not find a transcript for this video. This might be because:\n\n• The video doesn't have captions\n• Captions are not enabled\n• The page hasn't fully loaded",
+            "Transcript Found",
+            "We found the transcript data but need to process it differently. Please use the manual option for now.",
             [
-              { text: "Try Manual", onPress: () => setShowManualInput(true) },
-              { text: "Cancel", style: "cancel" },
+              { text: "Manual Input", onPress: () => setShowManualInput(true) },
+              { text: "OK", style: "cancel" },
             ]
           );
           break;
 
-        case "debug_test":
-          console.log("Test transcript length:", data.length);
-          console.log(
-            "Test transcript preview:",
-            data.transcript.slice(0, 200)
-          );
-          setDebugInfo("Test found " + data.length + " characters");
-          Alert.alert(
-            "Test Results",
-            "Found " +
-              data.length +
-              " characters of transcript.\n\nPreview: " +
-              data.transcript.slice(0, 100) +
-              "..."
-          );
-          break;
-
-        case "test_error":
-          console.log("Test error:", data.error);
-          Alert.alert("Test Error", data.error);
-          break;
-
-        case "function_not_found":
+        case "no_transcript":
           setExtracting(false);
           Alert.alert(
-            "Error",
-            "Extraction function not found. Please refresh the page."
+            "No Transcript Found",
+            "Could not find a transcript for this video. This might be because:\n\n• The video doesn't have captions/transcripts\n• The transcript is disabled by the creator\n• The page structure has changed\n\nTry clicking the three-dot menu below the video and look for 'Show transcript' option manually.",
+            [
+              { text: "Manual Input", onPress: () => setShowManualInput(true) },
+              { text: "OK", style: "cancel" },
+            ]
           );
           break;
 
-        case "execution_error":
+        case "extraction_error":
           setExtracting(false);
-          console.error("Execution error:", data.error);
+          console.error("Extraction error:", data.error);
           Alert.alert(
             "Extraction Error",
             "An error occurred during extraction: " + data.error
@@ -410,7 +786,7 @@ export default function YouTubeTranscriptExtractor({
     if (!canExtract) {
       Alert.alert(
         "Not a Video Page",
-        "Please navigate to a YouTube video page first. Look for videos with the CC (closed captions) button."
+        "Please navigate to a YouTube video page first."
       );
       return;
     }
@@ -450,10 +826,10 @@ export default function YouTubeTranscriptExtractor({
         setExtracting(false);
         Alert.alert(
           "Extraction Timeout",
-          "The extraction took too long. This video might not have captions available.\n\nTry:\n• Manually enabling captions (CC button)\n• Waiting for the page to fully load\n• Using the manual input option"
+          "The extraction took too long. This video might not have transcripts available.\n\nTry:\n• Opening the transcript manually (three-dot menu → Show transcript)\n• Using a different video\n• Using the manual input option"
         );
       }
-    }, 25000); // Increased timeout
+    }, 30000);
   };
 
   const handleManualSubmit = () => {
@@ -471,64 +847,6 @@ export default function YouTubeTranscriptExtractor({
     setManualTranscript("");
   };
 
-  const testExistingTranscript = () => {
-    setExtracting(true);
-    const jsCode = `
-      (function() {
-        try {
-          // Re-define the function inline for testing
-          function extractExistingTranscript() {
-            let transcript = '';
-            let foundElements = 0;
-            
-            const segmentSelectors = [
-              '.ytd-transcript-segment-renderer',
-              '[data-seq]',
-              '.segment-text',
-              '.cue-group-start-offset'
-            ];
-            
-            for (let i = 0; i < segmentSelectors.length; i++) {
-              const segments = document.querySelectorAll(segmentSelectors[i]);
-              foundElements += segments.length;
-              
-              for (let j = 0; j < segments.length; j++) {
-                const segment = segments[j];
-                const textElement = segment.querySelector('.segment-text') || segment;
-                const text = textElement.textContent || textElement.innerText || '';
-                
-                if (text && text.trim() && text.length > 2) {
-                  if (!text.match(/^\\d+:\\d+/) && !text.match(/^\\d+$/)) {
-                    transcript += text.trim() + ' ';
-                  }
-                }
-              }
-              
-              if (transcript.length > 100) break;
-            }
-            
-            return transcript.trim();
-          }
-          
-          const transcript = extractExistingTranscript();
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'debug_test',
-            transcript: transcript,
-            length: transcript.length
-          }));
-        } catch (e) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'test_error',
-            error: e.message
-          }));
-        }
-        return true;
-      })();
-    `;
-    webViewRef.current?.injectJavaScript(jsCode);
-    setExtracting(false);
-  };
-
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
@@ -541,7 +859,7 @@ export default function YouTubeTranscriptExtractor({
             YouTube Transcript
           </Text>
           <Text style={[styles.headerSubtitle, { color: colors.text + "70" }]}>
-            Enable CC first, then extract
+            Navigate to a video with captions
           </Text>
         </View>
 
@@ -579,17 +897,6 @@ export default function YouTubeTranscriptExtractor({
           </Text>
         </View>
 
-        {canExtract && __DEV__ && (
-          <TouchableOpacity
-            style={[styles.testButton, { backgroundColor: colors.tint + "20" }]}
-            onPress={testExistingTranscript}
-          >
-            <Text style={[styles.testButtonText, { color: colors.tint }]}>
-              Test
-            </Text>
-          </TouchableOpacity>
-        )}
-
         {extracting && (
           <View style={styles.extractingIndicator}>
             <ActivityIndicator size="small" color={colors.tint} />
@@ -611,7 +918,7 @@ export default function YouTubeTranscriptExtractor({
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
-        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         allowsBackForwardNavigationGestures={true}
         onNavigationStateChange={(navState) => {
           setCurrentUrl(navState.url);
@@ -629,7 +936,7 @@ export default function YouTubeTranscriptExtractor({
         </View>
       )}
 
-      {!loading && (
+      {!loading && showInstructions && (
         <View
           style={[styles.instructions, { backgroundColor: colors.background }]}
         >
@@ -638,8 +945,8 @@ export default function YouTubeTranscriptExtractor({
             <View style={styles.instructionTextContainer}>
               <Text style={[styles.instructionsText, { color: colors.text }]}>
                 {canExtract
-                  ? "1. Click CC button in video player to enable captions\n2. Then click Extract above"
-                  : "Find a video with captions (CC button visible)"}
+                  ? "Please manually open the transcript first:\n1. Click the three-dot menu (⋮) below the video\n2. Click 'Show transcript'\n3. Wait for transcript to appear\n4. Then click Extract above"
+                  : "Navigate to a YouTube video that has captions/transcripts"}
               </Text>
 
               {debugInfo && (
@@ -651,9 +958,27 @@ export default function YouTubeTranscriptExtractor({
           </View>
 
           {canExtract && (
-            <Text style={[styles.videoIdText, { color: colors.text + "60" }]}>
-              Video ID: {videoId}
-            </Text>
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.hideInstructionsButton,
+                  { backgroundColor: colors.text + "10" },
+                ]}
+                onPress={() => setShowInstructions(false)}
+              >
+                <Text
+                  style={[
+                    styles.hideInstructionsText,
+                    { color: colors.text + "60" },
+                  ]}
+                >
+                  Hide Instructions
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.videoIdText, { color: colors.text + "60" }]}>
+                Video ID: {videoId}
+              </Text>
+            </>
           )}
         </View>
       )}
@@ -729,9 +1054,8 @@ export default function YouTubeTranscriptExtractor({
                     { color: colors.text + "80" },
                   ]}
                 >
-                  1. Click the CC button in the video player{"\n"}
-                  2. Click the transcript button (usually three dots → Show
-                  transcript){"\n"}
+                  1. Click the three-dot menu (⋮) below the video{"\n"}
+                  2. Click "Show transcript"{"\n"}
                   3. Copy all the transcript text{"\n"}
                   4. Paste it below
                 </Text>
@@ -832,16 +1156,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
-  testButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  testButtonText: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
   extractingIndicator: {
     flexDirection: "row",
     alignItems: "center",
@@ -902,6 +1216,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 8,
     fontFamily: "monospace",
+  },
+
+  hideInstructionsButton: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  hideInstructionsText: {
+    fontSize: 12,
+    fontWeight: "500",
   },
 
   // Modal Styles
