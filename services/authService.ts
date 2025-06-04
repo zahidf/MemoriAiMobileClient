@@ -1,6 +1,9 @@
-import { GOOGLE_IOS_CLIENT_ID, GOOGLE_WEB_CLIENT_ID } from "@env";
+import { APP_CONFIG } from "@/constants/AppConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDatabase, type User } from "../database/database";
+
+const GOOGLE_WEB_CLIENT_ID = APP_CONFIG.GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = APP_CONFIG.GOOGLE_IOS_CLIENT_ID;
 
 // Set this to false for production builds
 const USE_MOCK_AUTH = true;
@@ -28,14 +31,6 @@ interface GoogleUserInfo {
   photo?: string | null;
   givenName?: string | null;
   familyName?: string | null;
-}
-
-interface GoogleSignInResult {
-  user?: GoogleUserInfo;
-  data?: {
-    user: GoogleUserInfo;
-  };
-  type?: "success" | "cancelled";
 }
 
 // Google Sign-In Configuration

@@ -21,6 +21,13 @@ const getAppInfo = () => {
       : expoConfig?.scheme || "memoriai",
     APP_OWNER: expoConfig?.owner || "zahidf",
     EAS_PROJECT_ID: expoConfig?.extra?.eas?.projectId,
+    
+    // Environment variables from expo config
+    GOOGLE_WEB_CLIENT_ID: expoConfig?.extra?.GOOGLE_WEB_CLIENT_ID,
+    GOOGLE_IOS_CLIENT_ID: expoConfig?.extra?.GOOGLE_IOS_CLIENT_ID,
+    GOOGLE_IOS_CLIENT_ID_SUFFIX: expoConfig?.extra?.GOOGLE_IOS_CLIENT_ID_SUFFIX,
+    BREVO_API_KEY: expoConfig?.extra?.BREVO_API_KEY,
+    FEEDBACK_EMAIL: expoConfig?.extra?.FEEDBACK_EMAIL,
   };
 };
 
